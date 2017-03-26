@@ -34,7 +34,7 @@ sub weechat_pre {
     $h{server} = (split( ",", $signal ))[0];
 
     if( weechat::info_get( "irc_is_channel", "$h{server},$h{target}" ) ) {
-        return if( $fp{"$h{target}$h{server}"} > time );
+        return if( $fp{"$h{target}$h{server}"} && $fp{"$h{target}$h{server}"} > time );
         if( $h{text} !~ /^(.\w+)2( .*|$)/ ) {
             my $nicks = weechat::infolist_get( "irc_nick", "", "$h{server},$h{target}" );
             while( weechat::infolist_next( $nicks ) ) {
@@ -149,10 +149,23 @@ sub event_privmsg {
         @ret = GoalRND( $1, 1 ); }
     elsif( /${t}goal ra?nd ?($|\d+)/ ) {
         @ret = GoalRND( $1, 0 ); }
-    elsif( /${t}goalhq ?(.*)/ ) {
-        @ret = GoalVid( $1, 1 ); }
-    elsif( /${t}goal ?(.*)/ ) {
-        @ret = GoalVid( $1, 0 ); }
+    elsif( /${t}goal(?:hq)? ?(.*)/ ) {
+        my $params = $1;
+        my $hq = /goalhq/;
+        @ret = GoalVid( $params, $hq );
+        if( $ret[0] =~ /^!!display it (...) (\d+)/ ) {
+            $h{goal_team} = $1;
+            $h{goal_index} = $2;
+            $h{goal_hq} = $hq;
+            @ret = GoalQueue( \%h );
+        }
+    }
+    elsif( /${t}queuetest (...) (\d+)/ ) {
+        $h{goal_team} = $1;
+        $h{goal_index} = $2;
+        $h{goal_hq} = 0;
+        @ret = GoalQueue( \%h );
+    }
     elsif( /${t}nascar/ ) {
         @ret = 'Turning left.' unless $scorebot; }
     elsif( /${t}pick (\w+ \w+.*)/ ) {
@@ -224,7 +237,7 @@ sub event_privmsg {
     }
 
     return if( !@ret );
-    if( $fp{"$target$h{server}"} == time ) {
+    if( $fp{"$target$h{server}"} >= time ) {
         $fp{"$target$h{server}"} = time + 2;
     } else {
         $fp{"$target$h{server}"} = time;
@@ -357,6 +370,7 @@ sub GetDate {
 our %fp;
 our %fl;
 our %GD;
+our %GQ; #goalqueue
 
 sub FindTeam{
     use constant teams => ( '0 is null',
@@ -1231,19 +1245,18 @@ sub GoalVid {
     $params =~ s/(\s*)$index\s*/$1/;
     my( $team, $date ) = SplitDate( $params, '%Y-%m-%d' );
     my( $fullid, $home ) = FindGameID( $team, $date );
-    my $homeaway = $home ? "home" : "away";
-    print "GoalVid -- team: $team ($homeaway) index: $index date: $date\n" if( DEBUG );
+    print "GoalVid -- team: $team index: $index date: $date\n" if( DEBUG );
     return 'usage: goal <team> <index> [date]' if( !$team || !$index );
     my( $ret );
     $fullid =~ /^(\d{4})/
-        or return "$team did not play on " . GetDate( ($date ? $date : '-12 hours'), '%b %d, %Y' );
+        or return "error $team did not play on " . GetDate( ($date ? $date : '-12 hours'), '%b %d, %Y' );
 
     return GoalVidOld( $fullid, $team, $index, $date ) if( $date && (GetDate( $date, "%Y%m%d" ) < 20160201) );
 
     my $data = download( "http://statsapi.web.nhl.com/api/v1/game/$fullid/content" );
     my( $json, $nhlteamid );
     eval { $json = decode_json( $data ); };
-    return 'an error occured' if( $@ );
+    return 'error decoding json' if( $@ );
 
     #extract team id...
     my @items = @{$json->{editorial}{preview}{items}};
@@ -1259,9 +1272,13 @@ sub GoalVid {
 
     my @goals = grep{ $_->{type} =~ /GOAL/i && $_->{teamId} == $nhlteamid } @{$json->{media}{milestones}{items}};
     @goals = sort{ $a->{timeOffset} <=> $b->{timeOffset} } @goals;
+    return 'error goal not found' if( $index > @goals );
 
     my $goal = $goals[$index - 1];
-    return 'goal not ready yet' if( $index > @goals || !$goal->{highlight}{playbacks} );
+    if( !$goal->{highlight}{playbacks} ) {
+        return "!!display it $team $index";
+    }
+
     my @playbacks = @{$goal->{highlight}{playbacks}};
 
     if( $hq ) {
@@ -1273,7 +1290,7 @@ sub GoalVid {
     #my( $url ) = to_json( $goal, {pretty => 1} ) =~ /(http:.*?1800k\.mp4)/; #easy...lazy?
     my $url = $playbacks[0]->{url};
     $url = shorturl( $url ) if( !DEBUG );
-    return "goal not found" if( !$url );
+    return "error goal not found" if( !$url );
 
     my $desc = "$goal->{highlight}{title} $goal->{highlight}{blurb} $goal->{highlight}{description}";
     my $extra = $desc =~ /(PPG|SHG)/i ? " [" . uc $1 . "]" : "";
@@ -1300,7 +1317,7 @@ sub GoalVidOld {
         %js = simplejson( $1 );
         last if( $js{teamid} == $teamid && ++$count == $index );
     }
-    return "goal not found" if( $index != $count );
+    return "error goal not found" if( $index != $count );
 
     $date = GetDate( ($date ? $date : '-12 hours'), '%Y/%m/%d' );
     for( my $ol = 1; $ol < 3 && !$vidurl; $ol++ ) {
@@ -1321,7 +1338,7 @@ sub GoalVidOld {
             last if( $vidurl );
         }
     }
-    return "video not ready yet" if( !$vidurl );
+    return "error video not ready yet" if( !$vidurl );
 
     if( !$ret ) {
         my @per = qw( 1st 2nd 3rd OT );
@@ -1333,6 +1350,60 @@ sub GoalVidOld {
     $vidurl = shorturl( $vidurl ) if( !DEBUG );
     return "$ret $vidurl";
 } #GoalVid()
+
+sub GoalQueue {
+    my $params = shift;
+    my %h = %$params;
+
+    return 'Goal is already in queue..' if( exists( $GQ{$h{target}}{$h{goal_team}}{$h{goal_index}}{TTL} ) );
+
+    if( !$GQ{hook} ) {
+        if( exists &weechat::command ) {
+            $GQ{hook} = weechat::hook_timer( 30000, 0, 0, 'GoalCheck', "" );
+        } else {
+            $GQ{hook} = Irssi::timeout_add( 30000, 'GoalCheck', "" );
+        }
+    }
+
+    $GQ{$h{target}}{$h{goal_team}}{$h{goal_index}}{TTL} = time + 30 * 60;
+    $GQ{$h{target}}{$h{goal_team}}{$h{goal_index}}{nick} = $h{nick};
+    $GQ{$h{target}}{$h{goal_team}}{$h{goal_index}}{shash} = $h{shash};
+    $GQ{$h{target}}{$h{goal_team}}{$h{goal_index}}{buffer} = $h{buffer};
+    $GQ{$h{target}}{$h{goal_team}}{$h{goal_index}}{hq} = $h{hq};
+
+    return "Goal added to queue, I will let you know when it's ready $h{nick}";
+
+}
+
+sub GoalCheck {
+
+    foreach( keys %GQ ) {
+        my $target = $_;
+        foreach( keys %{$GQ{$target}} ) {
+            my $team = $_;
+            foreach( keys %{$GQ{$target}{$team}} ) {
+                my $index = $_;
+                if( time > $GQ{$target}{$team}{$index}{TTL} ) {
+                    #timed out, remove it
+                    undef $GQ{$target}{$team}{$index};
+                    next;
+                }
+                my $vid = GoalVid( "$team $index", $GQ{$target}{$team}{$index}{hq} );
+                if( $vid !~ /^!!|error/ ) {
+                    #looks like we got it
+                    my $msg = "$GQ{$target}{$team}{$index}{nick}: $vid";
+                    if( exists &weechat::command ) {
+                        weechat::command( $GQ{$target}{$team}{$index}{buffer}, $msg );
+                    } else {
+                        $GQ{$target}{$team}{$index}{shash}->command( "msg $msg" );
+                    }
+                    undef $GQ{$target}{$team}{$index};
+                }
+            }
+        }
+    }
+
+}
 
 sub xrxs {
     my( $team ) = FindTeam( shift );
@@ -2120,7 +2191,7 @@ sub StatsNHL {
     my %tally;
     for my $i ( 0 .. $#stats ) {
         $statline .= "/" . $stats[$i]->{team}{abbreviation} if( $i > 0 );
-        for my $key ( keys $stats[$i]->{stat} ) {
+        for my $key ( keys %{$stats[$i]->{stat}} ) {
             foreach( $stats[$i]->{stat}{$key} ) {
                 if( /\d+\:\d+/ ) {
                     $tally{$key} += $1 * 60 + $2 if( $stats[$i]->{stat}{$key} =~ /(\d+)\:(\d+)/ );
