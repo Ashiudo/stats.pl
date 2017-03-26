@@ -594,7 +594,7 @@ sub OHL {
     my $data = download( $url );
     my $GameStatus;
 
-    ( $data ) = ( $data =~ /var todayData = '(.*?)'\;/gs );
+    ( $data ) = ( $data =~ /var todayData = '(.*?)'\;/s );
     my ( @games ) = ( $data =~ /Game.*?"\:\{(.*?)\}\}/gs );
     return 'No games found.' if( !@games );
     foreach (@games) {
@@ -639,7 +639,8 @@ sub RotoNews {
     my $search = shift;
     my %g = google( 'http://www.rotowire.com/hockey/', $search );
     for my $c ( 1 .. $g{count} ) {
-        if( $g{title}[$c] =~ /\Q$search\E/i && $g{url}[$c] =~ m!(http://www.rotowire.com/hockey/player\.htm\?[Ii][Dd]=\d+)! ) {
+        #http://www.rotowire.com/hockey/player.htm?id=1675
+        if( $g{title}[$c] =~ /\Q$search\E/i && $g{url}[$c] =~ m!(https?://www.rotowire.com/hockey/player\.htm\?[Ii][Dd]=\d+)! ) {
             $data = download( $1, 1 );
             last;
         }
@@ -664,9 +665,8 @@ sub RotoNews {
         push @ret, "\002$1\002: $2";
     }
     foreach( @ret ) { s/<.*?>//sg; }
-    @ret = reverse(@ret);
-    $ret[0] = "News for $player - $ret[0]";
-    return @ret;
+    $ret[$#ret] = "News for $player - $ret[$#ret]";
+    return reverse @ret;
 } #rotonews
 
 sub USHL {
@@ -1261,9 +1261,8 @@ sub GoalVid {
     @goals = sort{ $a->{timeOffset} <=> $b->{timeOffset} } @goals;
 
     my $goal = $goals[$index - 1];
+    return 'goal not ready yet' if( $index > @goals || !$goal->{highlight}{playbacks} );
     my @playbacks = @{$goal->{highlight}{playbacks}};
-
-    return 'goal not ready yet' if( $index > @goals || !@playbacks );
 
     if( $hq ) {
         @playbacks = grep { $_->{name} eq 'HTTP_CLOUD_WIRED_60' } @playbacks;
@@ -2883,6 +2882,7 @@ sub google {
     }
     $ret{count} = $c ? $c : 0;
     #print "Google found $ret{'count'} results.\n" if( DEBUG );
+    print "Google found nothing: " . Dumper($js) if( DEBUG && !$c );
     return %ret;
 } #Google
 
