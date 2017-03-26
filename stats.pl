@@ -1253,7 +1253,7 @@ sub GoalVid {
 
     return GoalVidOld( $fullid, $team, $index, $date ) if( $date && (GetDate( $date, "%Y%m%d" ) < 20160201) );
 
-    my $data = download( "http://statsapi.web.nhl.com/api/v1/game/$fullid/content" );
+    my $data = download( "http://statsapi.web.nhl.com/api/v1/game/$fullid/content", 1 );
     my( $json, $nhlteamid );
     eval { $json = decode_json( $data ); };
     return 'error decoding json' if( $@ );
@@ -1272,7 +1272,7 @@ sub GoalVid {
 
     my @goals = grep{ $_->{type} =~ /GOAL/i && $_->{teamId} == $nhlteamid } @{$json->{media}{milestones}{items}};
     @goals = sort{ $a->{timeOffset} <=> $b->{timeOffset} } @goals;
-    return 'error goal not found' if( $index > @goals );
+    return "!!display it $team $index" if( $index > @goals );
 
     my $goal = $goals[$index - 1];
     if( !$goal->{highlight}{playbacks} ) {
