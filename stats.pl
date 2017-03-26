@@ -616,16 +616,18 @@ sub OHL {
 
         if ($StatusID == 1) {
             $GameStatus = "$Time $Zone";
-            my $format = "%-3s %-1s %-3s %-10s";
-            push @ret,  sprintf($format, ($AwayCode, "@", $HomeCode, "( $GameStatus )"));
+            my $format = "%-3s @ %-3s %-10s";
+            push @ret,  sprintf($format, ($AwayCode, $HomeCode, "( $GameStatus )"));
         } elsif ($StatusID == 2) {
             $GameStatus = "$Clock $Period"; $AwayCode = "$AwayCode $AwayScore"; $HomeCode = "$HomeCode $HomeScore";
-            my $format = "%-4s %-1s %-4s %-10s";
-            push @ret,  sprintf($format, ($AwayCode, "@", $HomeCode, "( $GameStatus )"));
+            my $format = "%-4s %-4s %-10s";
+            push @ret,  sprintf($format, ($AwayCode, $HomeCode, "( $GameStatus )"));
+            BoldScore( $ret[$#ret] )
         } else {
             $GameStatus = "$SmallStatus"; $AwayCode = "$AwayCode $AwayScore"; $HomeCode = "$HomeCode $HomeScore";
-            my $format = "%-4s %-1s %-4s %-10s";
-            push @ret,  sprintf($format, ($AwayCode, "@", $HomeCode, "( $GameStatus )"));
+            my $format = "%-4s %-4s %-10s";
+            push @ret,  sprintf($format, ($AwayCode, $HomeCode, "( $GameStatus )"));
+            BoldScore( $ret[$#ret] )
         }
     }
     return @ret ? @ret : 'no games found';
@@ -2099,12 +2101,8 @@ sub StatsNHL {
             . " in $js->{birthCity}, " . ($js->{birthStateProvince} ? "$js->{birthStateProvince}, " : "") . $js->{birthCountry};
 
         eval {
-            my $url;
-            if( $js->{primaryPosition}{abbreviation} eq 'G' ) {
-                $url = "http://www.nhl.com/stats/rest/grouped/goalies/goalie_basic/season/goaliebios?cayenneExp=playerId=$nhlid";
-            } else {
-                $url = "http://www.nhl.com/stats/rest/grouped/skaters/basic/season/bios?cayenneExp=playerId=$nhlid";
-            }
+            my $url = "http://www.nhl.com/stats/rest/grouped/skaters/basic/season/bios?cayenneExp=playerId=$nhlid";
+            $url =~ s!skater.*?bio!goalies/goalie_basic/season/goaliebio! if( $js->{primaryPosition}{abbreviation} eq 'G' );
             my $bio = decode_json( download( $url, 1 ) );
             if( $bio = $bio->{data}->[0] ) {
                 my $draft = $bio->{playerDraftYear} ? "Drafted $bio->{playerDraftYear} Rd $bio->{playerDraftRoundNo} (\#$bio->{playerDraftOverallPickNo} overall)" : "Undrafted";
