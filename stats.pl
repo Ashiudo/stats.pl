@@ -458,7 +458,7 @@ sub download {
     return lget( $url ) if( $nocache );
     my $t = time;
     for my $c ( 1 .. 5 ) {
-        if( $t > $httpcache{$c}{timer} && $httpcache{$c}{url} ) {
+        if( $t >= $httpcache{$c}{timer} && $httpcache{$c}{url} ) {
             $httpcache{$c}{url} = "";
             $httpcache{$c}{data} = "";
             $httpcache{$c}{timer} = 0;
@@ -476,7 +476,7 @@ sub download {
         $httpcache{index} = 1 if( $httpcache{index} > 5 );
         $httpcache{$httpcache{index}}{url} = $url;
         $httpcache{$httpcache{index}}{data} = $tmp;
-        $httpcache{$httpcache{index}}{timer} = time + 300;
+        $httpcache{$httpcache{index}}{timer} = time + 30;
     }
     return $tmp;
 }
@@ -1369,7 +1369,7 @@ sub GoalQueue {
     $GQ{$h{target}}{$h{goal_team}}{$h{goal_index}}{nick} = $h{nick};
     $GQ{$h{target}}{$h{goal_team}}{$h{goal_index}}{shash} = $h{shash};
     $GQ{$h{target}}{$h{goal_team}}{$h{goal_index}}{buffer} = $h{buffer};
-    $GQ{$h{target}}{$h{goal_team}}{$h{goal_index}}{hq} = $h{hq};
+    $GQ{$h{target}}{$h{goal_team}}{$h{goal_index}}{hq} = $h{goal_hq};
 
     return "Goal added to queue, I will let you know when it's ready $h{nick}";
 
