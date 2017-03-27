@@ -223,7 +223,18 @@ sub event_privmsg {
     }
     elsif( /${t}test$/ ) {
         if( lc( $h{nick} ) eq owner ) {
-            @ret = "Cache hits: $httpcache{hits}";
+            my $test;
+            foreach( keys %GQ ) {
+                $test .= $_;
+                my $k = $_;
+                foreach( keys %{$GQ{$_}} ) {
+                    $test .= $_;
+                    foreach( keys %{$GQ{$k}{$_}} ) {
+                        $test .= $_;
+                    }
+                }
+            }
+            @ret = "Cache hits: $httpcache{hits} GoalQueue: $test";
         }
     }
     elsif( $target =~ /^#nhl$/i && $text =~ /${t}n[hf]l/i && $scorebot == 0 && $goalbot == 1 ) {
@@ -1385,7 +1396,7 @@ sub GoalCheck {
                 my $index = $_;
                 if( time > $GQ{$target}{$team}{$index}{TTL} ) {
                     #timed out, remove it
-                    undef $GQ{$target}{$team}{$index};
+                    delete $GQ{$target}{$team}{$index};
                     next;
                 }
                 my $vid = GoalVid( "$team $index", $GQ{$target}{$team}{$index}{hq} );
@@ -1397,10 +1408,21 @@ sub GoalCheck {
                     } else {
                         $GQ{$target}{$team}{$index}{shash}->command( "msg $msg" );
                     }
-                    undef $GQ{$target}{$team}{$index};
+                    delete $GQ{$target}{$team}{$index};
                 }
             }
+            delete $GQ{$target}{$team} if( ! keys( %{$GQ{$target}{$team}} ) );
         }
+        delete $GQ{$target} if( ($target ne 'hook') && keys( %{$GQ{$target}} ) == 0 );
+    }
+    if( keys(%GQ) == 1 ) {
+        #cleanup the hook
+        if( exists &weechat::command ) {
+            weechat::unhook( $GQ{hook} );
+        } else {
+            Irssi::timeout_remove( $GQ{hook} );
+        }
+        delete $GQ{hook};
     }
 
 }
