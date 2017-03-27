@@ -223,18 +223,7 @@ sub event_privmsg {
     }
     elsif( /${t}test$/ ) {
         if( lc( $h{nick} ) eq owner ) {
-            my $test;
-            foreach( keys %GQ ) {
-                $test .= $_;
-                my $k = $_;
-                foreach( keys %{$GQ{$_}} ) {
-                    $test .= $_;
-                    foreach( keys %{$GQ{$k}{$_}} ) {
-                        $test .= $_;
-                    }
-                }
-            }
-            @ret = "Cache hits: $httpcache{hits} GoalQueue: $test";
+            @ret = "Cache hits: $httpcache{hits}";
         }
     }
     elsif( $target =~ /^#nhl$/i && $text =~ /${t}n[hf]l/i && $scorebot == 0 && $goalbot == 1 ) {
@@ -282,7 +271,7 @@ sub event_privmsg {
         foreach( @ret ) {
             s/ (shar)ks/ \x0310$1ts\x0f/ig;
             s/c(\.|\w+) giroux( +)/Dink Giroux /i;
-            if( length($2) > 1 ) {
+            if( $2 && length($2) > 1 ) {
                 my $spaces;
                 if( length($1) == 1 ) {
                     $spaces = substr( $2, 0, length($2) - 3 ) if( length($2) > 3 );
@@ -1264,7 +1253,7 @@ sub GoalVid {
 
     return GoalVidOld( $fullid, $team, $index, $date ) if( $date && (GetDate( $date, "%Y%m%d" ) < 20160201) );
 
-    my $data = download( "http://statsapi.web.nhl.com/api/v1/game/$fullid/content", 1 );
+    my $data = download( "http://statsapi.web.nhl.com/api/v1/game/$fullid/content" );
     my( $json, $nhlteamid );
     eval { $json = decode_json( $data ); };
     return 'error decoding json' if( $@ );
@@ -1366,7 +1355,11 @@ sub GoalQueue {
     my $params = shift;
     my %h = %$params;
 
-    return 'Goal is already in queue..' if( exists( $GQ{$h{target}}{$h{goal_team}}{$h{goal_index}}{TTL} ) );
+    foreach( @{ $GQ{check} } ) {
+        if( $h{target} eq $_->{target} and $h{goal_team} eq $_->{goal_team} and $h{goal_index} eq $_->{goal_index} ) {
+            return 'Goal is already in queue';
+        }
+    }
 
     if( !$GQ{hook} ) {
         if( exists &weechat::command ) {
@@ -1376,11 +1369,8 @@ sub GoalQueue {
         }
     }
 
-    $GQ{$h{target}}{$h{goal_team}}{$h{goal_index}}{TTL} = time + 30 * 60;
-    $GQ{$h{target}}{$h{goal_team}}{$h{goal_index}}{nick} = $h{nick};
-    $GQ{$h{target}}{$h{goal_team}}{$h{goal_index}}{shash} = $h{shash};
-    $GQ{$h{target}}{$h{goal_team}}{$h{goal_index}}{buffer} = $h{buffer};
-    $GQ{$h{target}}{$h{goal_team}}{$h{goal_index}}{hq} = $h{goal_hq};
+    $h{TTL} = time + 30 * 60;
+    push @{ $GQ{check} }, \%h;
 
     return "Goal added to queue, I will let you know when it's ready $h{nick}";
 
@@ -1388,35 +1378,24 @@ sub GoalQueue {
 
 sub GoalCheck {
 
-    foreach( keys %GQ ) {
-        my $target = $_;
-        foreach( keys %{$GQ{$target}} ) {
-            my $team = $_;
-            foreach( keys %{$GQ{$target}{$team}} ) {
-                my $index = $_;
-                if( time > $GQ{$target}{$team}{$index}{TTL} ) {
-                    #timed out, remove it
-                    delete $GQ{$target}{$team}{$index};
-                    next;
-                }
-                my $vid = GoalVid( "$team $index", $GQ{$target}{$team}{$index}{hq} );
-                if( $vid !~ /^!!|error/ ) {
-                    #looks like we got it
-                    my $msg = "$GQ{$target}{$team}{$index}{nick}: $vid";
-                    if( exists &weechat::command ) {
-                        weechat::command( $GQ{$target}{$team}{$index}{buffer}, $msg );
-                    } else {
-                        $GQ{$target}{$team}{$index}{shash}->command( "msg $msg" );
-                    }
-                    delete $GQ{$target}{$team}{$index};
-                }
+    for( my $i=0; $i <= $#{ $GQ{check} }; $i++ ) {
+        my $vid = GoalVid( "$GQ{check}[$i]{goal_team} $GQ{check}[$i]{goal_index}", $GQ{check}[$i]{goal_hq} );
+        if( $vid =~ /^!!|error/ ) {
+            next if( time < $GQ{check}[$i]{TTL} );
+        } else {
+            my $msg = "$GQ{check}[$i]{nick}: $vid";
+            if( exists &weechat::command ) {
+                weechat::command( $GQ{check}[$i]{buffer}, $msg );
+            } else {
+                $GQ{check}[$i]{shash}->command( "msg $msg" );
             }
-            delete $GQ{$target}{$team} if( ! keys( %{$GQ{$target}{$team}} ) );
         }
-        delete $GQ{$target} if( ($target ne 'hook') && keys( %{$GQ{$target}} ) == 0 );
+        splice @{ $GQ{check} }, $i, 1;
+        $i--;
     }
-    if( keys(%GQ) == 1 ) {
-        #cleanup the hook
+
+    if( ! @{ $GQ{check} } ) {
+        #cleanup the timer hook
         if( exists &weechat::command ) {
             weechat::unhook( $GQ{hook} );
         } else {
