@@ -269,7 +269,7 @@ sub event_privmsg {
 
     if( $target =~ /^#(nhl|hockey|ash.*)$/i ) {
         foreach( @ret ) {
-            s/ (shar)ks/ \x0310$1ts\x0f/ig;
+            s/ (shar)ks/ \x0310$1ts\x03/ig;
             s/c(\.|\w+) giroux( +)/Dink Giroux /i;
             if( $2 && length($2) > 1 ) {
                 my $spaces;
@@ -603,6 +603,7 @@ sub SchedNHLold {
 sub OHL {
     my @ret;
     my( $search, $date ) = SplitDate( shift, '%Y-%m-%d' );
+    $date = GetDate( 'now', '%Y-%m-%d' ) if( !$date );
 
     my $url = "http://cluster.leaguestat.com/lsconsole/json.php?client_code=ohl&forcedate=$date";
     my $data = download( $url );
@@ -1108,8 +1109,8 @@ sub StatsTeamNHL{
 sub LeadersNHL {
     my $cat = lc( shift );
     my $i = 0;
-    my @cats = qw!p($|[^l]) g($|o) a plus|\+ ga s[av] w s[oh]!;
-    my @catnames = qw(points goals assists plusMinus gaa savePercentage wins shutout);
+    my @cats = qw!    p($|[^l]) g($|o)  a       plus|\+   ga  s[av]          w    s[oh]!;
+    my @catnames = qw(points    goals   assists plusMinus gaa savePercentage wins shutout);
     foreach( @cats ) {
         last if( $cat =~ /^$_/ );
         $i++;
@@ -1167,11 +1168,12 @@ sub FindGameID {
         ($_) = download( "http://live.nhl.com/GameData/GCScoreboard/$date.jsonp", 1 ) =~ /loadScoreboard\(\{"games":\[(.+?)\]/s
             or return 0;
 
-        while( !$ret && /\{(.*?)\}/sg ) {
+        while( /\{(.*?)\}/sg ) {
             my %js = simplejson( $+ );
             if( $$team eq $js{hta} || $$team eq $js{ata} ) {
                 $ret = $js{id};
                 $home = $$team eq $js{hta};
+                return( $ret, $home );
             }
         }
     } else {
@@ -1184,7 +1186,7 @@ sub FindGameID {
             if( $GD{gamelink}[$i] =~ /(\d{4})\d{4}\/.S(\d{6})/ ) {
                 $ret = "$1$2";
             }
-            last;
+            return($ret, $home);
         }
     }
     return ($ret, $home);
@@ -2108,8 +2110,8 @@ sub StatsNHL {
     my $nhlid;
     for my $c ( 1 .. $google{count} ) {
         #http://www.nhl.com/player/david-perron-8474102
-        if( $google{title}[$c] =~ /\Q$fname\E.*? \Q$lname\E|\Q$fletter $lname\E/i ) {
-            $nhlid = $1 if( $google{url}[$c] =~ /player.*?(\d+)/ );
+        if( $google{url}[1] =~ /player.*?(\d+)/ ) {
+            $nhlid = $1;
             last;
         }
     }
@@ -2277,9 +2279,11 @@ sub StatsNHL {
         elsif( /^blocked$/ ) {
             $statline .= " | BKS" }
         elsif( /^plusMinus$/ ) {
-            $statline .= " | " . ($tally{$_} >= 0 ? "+" : "") }
-        else {
+            $statline .= " | " . ($tally{$_} >= 0 ? "+" : "") . $tally{$_};
+            next;
+        } else {
             print "unparsed key: $_\n" if( DEBUG );
+            $statline .= " | $_";
             next;
         }
         $statline .= " $tally{$_}";
