@@ -1654,10 +1654,11 @@ sub StandingsNHL {
         $wild = 1;
     } elsif( $search =~ /(east|west)/ ) {
         $search = $1;
+        $wild = 1 if( !$season && GetDate( 'now', '%m' ) =~ /0[34]/ );
     } else {
         return "Valid categories: EAST WEST ATL CEN MET PAC [add -p for wildcard] [season]";
     }
-
+    
     print "search: $search ($wild)\n" if( DEBUG );
     my $url = 'http://statsapi.web.nhl.com/api/v1/standings?expand=standings.record,standings.team,standings.division,standings.conference,team.schedule.next,team.schedule.previous';
     my $data = download( $url . ($season ? "&season=$season".($season+1) : ""), 1 );
@@ -2872,7 +2873,7 @@ sub SplitDate {
     my( $d, $fmt ) = @_;
     $_ = $d;
     print "SplitDate: $_ -- $fmt | " if( DEBUG );
-    my( $team, $date ) = ( /((?:\w+ |\* )+?)((?:last|next)? *\S+)$/i || /(.*?)(\d+.*)/ ) ? ($1,$2) : ($_,'');
+    my( $team, $date ) = ( /((?:\w+ |\* )+?)((?:last|next)? *\S+)\s*$/i || /(.*?)(\d+.*)/ ) ? ($1,$2) : ($_,'');
     $team =~ s/\s+$//;
     $team = '*' if( !$team && $date );
     if( $date ) {
