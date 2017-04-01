@@ -1642,7 +1642,6 @@ sub Wildcard {
     return @ret > 8 ? splice( @ret, 8 ) : @ret;
 }
 
-
 sub StandingsNHL {
     my $search = lc shift;
     my( $season ) = $search =~ /(\d{4})$/; #&season=20162017
