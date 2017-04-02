@@ -1648,12 +1648,11 @@ sub StandingsNHL {
     my $wild = 0;
     if( $search =~ /(atl|met|cen|pac)/ ) {
         $search = $1;
-    } elsif( $search =~ /(\S+?) ?-?(?:wc|p|wild)/  ) {
+    } elsif( $search =~ /(\S+?) ?-?(?:wc|p|wild)/ || ( !$season && GetDate( 'now', '%m' ) =~ /0[34]/ ) ) {
         $search = $1 eq 'west' ? 'cen|pac' : 'atl|met';
         $wild = 1;
     } elsif( $search =~ /(east|west)/ ) {
         $search = $1;
-        $wild = 1 if( !$season && GetDate( 'now', '%m' ) =~ /0[34]/ );
     } else {
         return "Valid categories: EAST WEST ATL CEN MET PAC [add -p for wildcard] [season]";
     }
