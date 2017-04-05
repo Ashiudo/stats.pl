@@ -1648,11 +1648,15 @@ sub StandingsNHL {
     my $wild = 0;
     if( $search =~ /(atl|met|cen|pac)/ ) {
         $search = $1;
-    } elsif( $search =~ /(\S+?) ?-?(?:wc|p|wild)/ || ( !$season && GetDate( 'now', '%m' ) =~ /0[34]/ ) ) {
+    } elsif( $search =~ /(\S+?) ?-?(?:wc|p|wild)/ ) {
         $search = $1 eq 'west' ? 'cen|pac' : 'atl|met';
         $wild = 1;
     } elsif( $search =~ /(east|west)/ ) {
         $search = $1;
+        if ( !$season && GetDate( 'now', '%m' ) =~ /0[34]/ ) {
+            $wild = 1;
+            $search = $search eq 'west' ? 'cen|pac' : 'atl|met';
+        }
     } else {
         return "Valid categories: EAST WEST ATL CEN MET PAC [add -p for wildcard] [season]";
     }
@@ -2268,10 +2272,11 @@ sub StatsNHL {
         elsif( /(?|(g)ames(S)tarted|(g)oals(A)gainst|(g)oal(A)gainst(A)verage|(s)hots(A)gainst|(s)a(v)es|(s)hut(o)uts)/ ) {
             $statline .= " | " . uc "$1$2" . ( $3 ? uc $3 : "") }
         elsif( /faceOff(.)/ ) {
+            next if( ! $tally{faceOffPct} );
             $statline .= " | FO" . ($1 eq "P" ? "%" : $1) }
         elsif( /^savePercentage/ ) {
             $statline .= " | SV%" }
-        elsif( /^shot(s|Pct)$/ ) {
+        elsif( /^shot(s|P)/ ) {
             $statline .= " | SOG" . ($1 eq "P" ? "%" : "") }
         elsif( /^games$/ ) {
             $statline .= " | GP" }
