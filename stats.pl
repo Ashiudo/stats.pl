@@ -2160,7 +2160,7 @@ sub StatsNHL {
             @stats = grep { $_->{season} eq $season && $_->{league}{id} == 133 } @{ $stats[0]->{splits} };
         } else {
             @stats = grep { $_->{league}{id} && $_->{league}{id} == 133 } @{ $stats[0]->{splits} };
-            $season = $stats[$#stats]->{season};
+            $season = $stats[$#stats]->{season} if( @stats );
             @stats = grep { $_->{season} eq $season } @stats;
         }
         $statline = "$js->{fullName} | " if( $year );
@@ -2187,7 +2187,7 @@ sub StatsNHL {
         };
 
         if( ! $stats[0]->{stat}{games} ) {
-            push @ret, "No stats found that year";
+            push @ret, "No stats found";
             return @ret;
         }
     } else {
@@ -2276,8 +2276,8 @@ sub StatsNHL {
             $statline .= " | FO" . ($1 eq "P" ? "%" : $1) }
         elsif( /^savePercentage/ ) {
             $statline .= " | SV%" }
-        elsif( /^shot(s|P)/ ) {
-            $statline .= " | SOG" . ($1 eq "P" ? "%" : "") }
+        elsif( /^shot(s|Pct)$/ ) {
+            $statline .= " | SOG" . ($1 ne "s" ? "%" : "") }
         elsif( /^games$/ ) {
             $statline .= " | GP" }
         elsif( /^blocked$/ ) {
