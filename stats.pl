@@ -1162,18 +1162,16 @@ sub FindGameID {
 
     $$team = FindTeam( $$team );
     $$team = FindTeam( $$team ) if( length( $$team ) != 3 );
-    my( $ret, $home ) = (0,0);
+    my( $ret) = 0;
     if( $date ) {
         $date = GetDate( $date, '%Y-%m-%d' );
-        ($_) = download( "http://live.nhl.com/GameData/GCScoreboard/$date.jsonp", 1 ) =~ /loadScoreboard\(\{"games":\[(.+?)\]/s
-            or return 0;
+        ($_) = download( "http://live.nhl.com/GameData/GCScoreboard/$date.jsonp" ) =~ /loadScoreboard\(\{"games":\[(.+?)\]/s
+            or return ();
 
         while( /\{(.*?)\}/sg ) {
             my %js = simplejson( $+ );
             if( $$team eq $js{hta} || $$team eq $js{ata} ) {
-                $ret = $js{id};
-                $home = $$team eq $js{hta};
-                return( $ret, $home );
+                return( $js{id}, \%js );
             }
         }
     } else {
@@ -1182,14 +1180,13 @@ sub FindGameID {
         }
         for( my $i = 0; $i < @{$GD{gamelink}} ; $i++ ) {
             next unless( $$team eq $GD{team}[$i][0] || $$team eq $GD{team}[$i][1] );
-            $home = $$team eq $GD{team}[$i][1];
             if( $GD{gamelink}[$i] =~ /(\d{4})\d{4}\/.S(\d{6})/ ) {
                 $ret = "$1$2";
             }
-            return($ret, $home);
+            return($ret);
         }
     }
-    return ($ret, $home);
+    return $ret;
 }
 
 sub GoalSearch {
@@ -1246,7 +1243,7 @@ sub GoalVid {
     my( $index ) = $params =~ /(\d+)/;
     $params =~ s/(\s*)$index\s*/$1/;
     my( $team, $date ) = SplitDate( $params, '%Y-%m-%d' );
-    my( $fullid, $home ) = FindGameID( $team, $date );
+    my( $fullid, $js ) = FindGameID( $team, $date );
     print "GoalVid -- team: $team index: $index date: $date\n" if( DEBUG );
     return 'usage: goal <team> <index> [date]' if( !$team || !$index );
     my( $ret );
@@ -1274,8 +1271,11 @@ sub GoalVid {
 
     my @goals = grep{ $_->{type} =~ /GOAL/i && $_->{teamId} == $nhlteamid } @{$json->{media}{milestones}{items}};
     @goals = sort{ $a->{timeOffset} <=> $b->{timeOffset} } @goals;
-    return "!!display it $team $index" if( $index > @goals );
-
+    if( $index > @goals ) {
+        my $home = $js->{ata} eq $team;
+        return "Goal not found" if( $js->{bs} eq 'FINAL' || ($index > $js->{$home ? 'hts' : 'ats'} + 1) );
+        return "!!display it $team $index";
+    }
     my $goal = $goals[$index - 1];
     if( !$goal->{highlight}{playbacks} ) {
         return "!!display it $team $index";
@@ -1660,7 +1660,7 @@ sub StandingsNHL {
     } else {
         return "Valid categories: EAST WEST ATL CEN MET PAC [add -p for wildcard] [season]";
     }
-    
+
     print "search: $search ($wild)\n" if( DEBUG );
     my $url = 'http://statsapi.web.nhl.com/api/v1/standings?expand=standings.record,standings.team,standings.division,standings.conference,team.schedule.next,team.schedule.previous';
     my $data = download( $url . ($season ? "&season=$season".($season+1) : ""), 1 );
