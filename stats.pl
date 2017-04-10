@@ -511,6 +511,8 @@ sub SchedNHL {
     my $url = "http://statsapi.web.nhl.com/api/v1/schedule?expand=schedule.teams,schedule.linescore,schedule.decisions&gameType=R";
     $url .= "&startDate=" . ($index < 1 ? "$season-10-01&endDate=$today" : "$today&endDate=" . ($season+1) . "-06-01");
 
+    $url =~ s/\&gameType\=R// if( $today =~ /^.....0[4-6]/ );
+
     my $nhlid = NHLTeamID( $team );
     my $data = download( "$url&teamId=" . $nhlid );
     my $js;
@@ -1256,18 +1258,7 @@ sub GoalVid {
     my( $json, $nhlteamid );
     eval { $json = decode_json( $data ); };
     return 'error decoding json' if( $@ );
-
-    #extract team id...
-    my @items = @{$json->{editorial}{preview}{items}};
-    for my $i ( 0 .. $#items ) {
-        foreach( @{$items[$i]->{keywordsAll}} ) {
-            if( $_->{type} eq 'teamId' && FindTeam( $_->{displayName} ) eq $team ) {
-                $nhlteamid = $_->{value};
-                print "found nhl team id: $nhlteamid\n" if( DEBUG );
-                $i = $#items; last;
-            }
-        }
-    }
+    $nhlteamid = NHLTeamID( $team );
 
     my @goals = grep{ $_->{type} =~ /GOAL/i && $_->{teamId} == $nhlteamid } @{$json->{media}{milestones}{items}};
     @goals = sort{ $a->{timeOffset} <=> $b->{timeOffset} } @goals;
