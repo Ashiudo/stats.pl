@@ -741,19 +741,21 @@ sub PlayoffOdds{
 } #playoffodds
 
 sub PlayoffMatches {
-    my $search = FindTeam( shift, 1 );
-    my $data = download( "http://statsapi.web.nhl.com/api/v1/tournaments/playoffs?expand=round.series" );
+    my $params = shift;
+    my $search = FindTeam( $1, 1 ) if( $params =~ /(\w+)/ );
+    my $season = $params =~ /(\d{4})/ ? "&season=$1" . ($1 + 1) : "";
+    my $data = download( "http://statsapi.web.nhl.com/api/v1/tournaments/playoffs?expand=round.series$season" );
     my( @ret, $js );
     eval { $js = decode_json( $data ) };
-    return 'an error occured' if( $@ );
+    return "an error occured $1" if( $@ || ($js->{message} && $js->{message} =~ /^(No.*)/) );
 
     my @rounds = @{ $js->{rounds} };
-    for( my $i = $js->{defaultRound} - 1; $i >= 0; $i-- ) {
+    for( my $i = ($params =~ /r\S*d ?(\d)/ ? $1 : $js->{defaultRound}) - 1; $i >= 0; $i-- ) {
         @ret = $rounds[$i]->{names}{name};
         foreach( @{ $rounds[$i]->{series} } ) {
             if( $search && $_->{names}{matchupShortName} =~ /$search/ ) {
                 my $tmp = "$rounds[$i]->{names}{name} | $_->{names}{matchupName} | $_->{currentGame}{seriesSummary}{seriesStatus}";
-                $tmp .= " | " . GetDate( $_->{currentGame}{seriesSummary}{gameTime}, "%c" ) if( $_->{currentGame}{seriesSummary}{seriesStatusShort} !~ /wins/i );
+                $tmp .= " | " . GetDate( $_->{currentGame}{seriesSummary}{gameTime}, '%c' ) if( $_->{currentGame}{seriesSummary}{seriesStatusShort} !~ /wins/i );
                 return $tmp;
             } elsif( !$search ) {
                 my $tmp = $_->{currentGame}{seriesSummary}{seriesStatus} ? $_->{currentGame}{seriesSummary}{seriesStatus} : $_->{names}{matchupShortName};
@@ -972,7 +974,7 @@ sub Eklund{
     if( $r == 13 )      { $teamabv = 'LA' }
     elsif( $r == 25 )   { $teamabv = 'SJ' } #stupid espn...
     elsif( $r == 26 )   { $teamabv = 'TB' }
-    else { $teamabv = FindTeam( $team ) }
+    else { $teamabv = FindTeam( $team, 1 ) }
 
     my $url = 'http://espn.go.com/nhl/teams/roster?team=' . $teamabv;
 
@@ -1064,29 +1066,6 @@ sub StatsTeam{
         }
     }
     return 'an error occured';
-}
-
-sub StatsTeamNHL{
-    my $search = FindTeam( shift );
-    return 'tstats <team>' if( !$search );
-    $search = FindTeam( $search ) if( length( $search ) == 3 );
-
-    my $data = download( 'http://mapleleafs.nhl.com/club/teamstatscomparisonprint.htm' );
-    my( $tmp, $stats ) = ( $data =~ /<\/table>.*?<tr[^>]*>(.*?)<\/tr>(.*)/s );
-    my @cats = ( $tmp =~ /<td[^>]*>(.*?)<\/td>/sg );
-    my @teams = ( $stats =~ /<tr>(.*?)<\/tr>/sg );
-
-    foreach( @teams ) {
-        my @items = ( /<td[^>]*>(.*?)<\/td>/sg );
-        my $ret = FindTeam( $items[1] );
-        next unless( $ret eq $search );
-        for( my $i = 2; $i < @items; $i++ ) {
-            $ret .= " | $cats[$i] $items[$i]";
-        }
-        $ret =~ s/  +/ /g;
-        return $ret;
-    }
-    return 'no match found';
 }
 
 sub LeadersNHL {
