@@ -385,7 +385,7 @@ sub FindTeam{
         ANA BOS BUF CGY CAR CHI COL CBJ DAL DET EDM FLA LAK MIN MTL
         NSH NJD NYI NYR OTT PHI ARI PIT STL SJS TBL TOR VAN WSH WPG
     );
-    my $search = uc( shift );
+    my( $search, $forceabv ) = ( uc shift, shift );
     return (teams)[ $search ] if( ($search =~ /^[1-9]+0?$/) && ($search <= 30) );
     foreach( $search ) {
         return (abv)[13] if( /^LA$/ );
@@ -403,7 +403,9 @@ sub FindTeam{
         return (abv)[19] if( /RAN?G/ );
     }
     for my $i ( 1 .. 30 ) {
-        return (teams)[$i] if( (abv)[$i] eq $search );
+        if( (abv)[$i] eq $search ) {
+            return $forceabv ? (abv)[$i] : (teams)[$i];
+        }
         return (abv)[$i] if( uc( (teams)[$i] ) eq $search );
     }
     $search =~ s/ //g;
@@ -508,10 +510,8 @@ sub SchedNHL {
 
     my $season = GetDate( '8 months ago', "%Y" );
     my $today = GetDate( 'today', "%Y-%m-%d" );
-    my $url = "http://statsapi.web.nhl.com/api/v1/schedule?expand=schedule.teams,schedule.linescore,schedule.decisions&gameType=R";
+    my $url = "http://statsapi.web.nhl.com/api/v1/schedule?expand=schedule.teams,schedule.linescore,schedule.decisions";
     $url .= "&startDate=" . ($index < 1 ? "$season-10-01&endDate=$today" : "$today&endDate=" . ($season+1) . "-06-01");
-
-    $url =~ s/\&gameType\=R// if( $today =~ /^.....0[4-6]/ );
 
     my $nhlid = NHLTeamID( $team );
     my $data = download( "$url&teamId=" . $nhlid );
@@ -545,7 +545,11 @@ sub SchedNHL {
             } else {
                 $game = "vs " . $_->{games}->[0]->{teams}{away}{team}{abbreviation}
             }
-            push @ret, $game . GetDate( $_->{games}->[0]->{gameDate}, ' %c' );
+            if( $_->{games}->[0]->{status}{statusCode} eq '8' ) {
+                push @ret, $game . GetDate( $_->{games}->[0]->{gameDate}, ' %a %d %b %Y (TBD)' );
+            } else {
+                push @ret, $game . GetDate( $_->{games}->[0]->{gameDate}, ' %c' );
+            }
             last if @ret == $index;
         }
     }
@@ -737,52 +741,29 @@ sub PlayoffOdds{
 } #playoffodds
 
 sub PlayoffMatches {
-    my $search = FindTeam( shift );
-    my $date = int `date +"%m%d"`;
-    return PlayoffOdds( $search ) if( (length( $search ) > 0) && (($date < 413) || ($date > 1000)) );
+    my $search = FindTeam( shift, 1 );
+    my $data = download( "http://statsapi.web.nhl.com/api/v1/tournaments/playoffs?expand=round.series" );
+    my( @ret, $js );
+    eval { $js = decode_json( $data ) };
+    return 'an error occured' if( $@ );
 
-    my( $data ) = download( 'http://www.nhl.com/ice/stanleycup.htm' ) =~ /id="brackets"(.*)/s
-        or return 'an error occured.';
-
-    my( @ret, @round );
-    for my $r ( 1 .. 4 ) {
-        my @matchup;
-        foreach( $data =~ /<!-- ROUND $r -->(.*?)<!-- end ROUND $r/sg ) {
-            next if( ! $_ );
-            my $rd = {};
-            #$rd->{raw} = $_;
-            ($rd->{series}) = /class="series-wins">(.*?)</s;
-            ($rd->{gamedata}) = /"seriesGameData">(.*?)<\/div>/s;
-            $rd->{gamedata} =~ s/<.*?>|\R//sg;
-            while( /<div class="logo-team (\w+).*?alt="(.*?)".*?<span>(.*?)</sg ) {
-                $rd->{"$1full"} = $2; $rd->{"$1abv"} = $3;
-            }
-            push @matchup, $rd;
-        }
-        push @{ $round[$r] }, @matchup if( @matchup );
-    }
-
-    $search = "" if( $search eq '*' );
-    $search = FindTeam( $search ) if( length( $search ) != 3 );
-    for( my $r = $#round; $r > 0; $r-- ) {
-        my $tmp = $search ? "" : "Round $r";
-        foreach( @{ $round[$r] } ) {
-            my $status = $_->{topabv} . " $1 " . $_->{bottomabv} . " $2" if( $_->{series} =~ /(\d) - (\d)/ );
-            BoldScore( $status );
-            if( !$search ) {
-                #push @ret, "$status | $_->{gamedata}";
-                $tmp .= " | $status";
-            } elsif( $search eq $_->{topabv} || $search eq $_->{bottomabv} ) {
-                if( $_->{gamedata} =~ /Final/ ) {
-                    $_->{gamedata} =~ s/(.*?)-(GAME.*)/$2 \( $1\)/s;
-                    #BoldScore( $_->{gamedata} );
-                }
-                push @ret, "Round $r | $status | $_->{gamedata}";
+    my @rounds = @{ $js->{rounds} };
+    for( my $i = $js->{defaultRound} - 1; $i >= 0; $i-- ) {
+        @ret = $rounds[$i]->{names}{name};
+        foreach( @{ $rounds[$i]->{series} } ) {
+            if( $search && $_->{names}{matchupShortName} =~ /$search/ ) {
+                my $tmp = "$rounds[$i]->{names}{name} | $_->{names}{matchupName} | $_->{currentGame}{seriesSummary}{seriesStatus}";
+                $tmp .= " | " . GetDate( $_->{currentGame}{seriesSummary}{gameTime}, "%c" ) if( $_->{currentGame}{seriesSummary}{seriesStatusShort} !~ /wins/i );
+                return $tmp;
+            } elsif( !$search ) {
+                my $tmp = $_->{currentGame}{seriesSummary}{seriesStatus} ? $_->{currentGame}{seriesSummary}{seriesStatus} : $_->{names}{matchupShortName};
+                $tmp .= " | " . GetDate( $_->{currentGame}{seriesSummary}{gameTime}, '%a %I:%M %Z' ) if( $_->{currentGame}{seriesSummary}{seriesStatusShort} !~ /wins/i );
+                push @ret, $tmp;
             }
         }
-        push @ret, $tmp if( $tmp =~ /\| / );
+        last if( !$search );
     }
-    return @ret ? @ret : "team not found";
+    return @ret ? @ret : 'team not found';
 }
 
 sub SalaryTeamCap{
