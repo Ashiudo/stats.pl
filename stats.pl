@@ -754,18 +754,21 @@ sub PlayoffMatches {
         @ret = $rounds[$i]->{names}{name};
         foreach( @{ $rounds[$i]->{series} } ) {
             if( $search && $_->{names}{matchupShortName} =~ /$search/ ) {
-                my $tmp = "$rounds[$i]->{names}{name} | $_->{names}{matchupName} | $_->{currentGame}{seriesSummary}{seriesStatus}";
+                my $tmp = "$ret[0] | $_->{names}{matchupName} | $_->{currentGame}{seriesSummary}{seriesStatus}";
                 $tmp .= " | " . GetDate( $_->{currentGame}{seriesSummary}{gameTime}, '%c' ) if( $_->{currentGame}{seriesSummary}{seriesStatusShort} !~ /wins/i );
                 return $tmp;
             } elsif( !$search ) {
-                my $tmp = $_->{currentGame}{seriesSummary}{seriesStatus} ? $_->{currentGame}{seriesSummary}{seriesStatus} : $_->{names}{matchupShortName};
-                $tmp .= " | " . GetDate( $_->{currentGame}{seriesSummary}{gameTime}, '%a %I:%M %Z' ) if( $_->{currentGame}{seriesSummary}{seriesStatusShort} !~ /wins/i );
+                my $tmp = $_->{names}{matchupShortName};
+                $tmp .=  " | " . $_->{currentGame}{seriesSummary}{seriesStatus} if( $_->{currentGame}{seriesSummary}{seriesStatus} );
+                if( $_->{currentGame}{seriesSummary}{seriesStatusShort} !~ /wins/i ) {
+                    $tmp .= " | " . GetDate( $_->{currentGame}{seriesSummary}{gameTime}, '%a %I:%M %Z' );
+                }
                 push @ret, $tmp;
             }
         }
         last if( !$search );
     }
-    return @ret ? @ret : 'team not found';
+    return @ret > 1 ? @ret : 'team not found';
 }
 
 sub SalaryTeamCap{
