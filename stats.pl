@@ -761,7 +761,7 @@ sub PlayoffMatches {
                 my $tmp = $_->{names}{matchupShortName};
                 $tmp .=  " | " . $_->{currentGame}{seriesSummary}{seriesStatus} if( $_->{currentGame}{seriesSummary}{seriesStatus} );
                 if( $_->{currentGame}{seriesSummary}{seriesStatusShort} !~ /wins/i ) {
-                    $tmp .= " | " . GetDate( $_->{currentGame}{seriesSummary}{gameTime}, '%a %I:%M %Z' );
+                    $tmp .= " | " . GetDate( $_->{currentGame}{seriesSummary}{gameTime}, '%a %-l:%M %p %Z' );
                 }
                 push @ret, $tmp;
             }
@@ -1227,7 +1227,7 @@ sub GoalVid {
     @goals = sort{ $a->{timeOffset} <=> $b->{timeOffset} } @goals;
     if( $index > @goals ) {
         my $home = $js->{ata} eq $team;
-        return "Goal not found" if( $js->{bs} eq 'FINAL' || ($index > $js->{$home ? 'hts' : 'ats'} + 1) );
+        return "Goal not found" if( $js->{bs} eq 'FINAL' || ($index > $js->{$home ? 'hts' : 'ats'} + 2) );
         return "!!display it $team $index";
     }
     my $goal = $goals[$index - 1];
@@ -2170,8 +2170,8 @@ sub StatsNHL {
     }
 
     if( $js->{primaryPosition}{abbreviation} eq 'G' ) {
-        $tally{savePercentage} = sprintf( '%.3f', $tally{saves} / $tally{shotsAgainst} );
-        $tally{goalAgainstAverage} = sprintf( '%4.2f', ( 60*60 / $tally{timeOnIce} ) * $tally{goalsAgainst} );
+        $tally{savePercentage} = sprintf( '%.3f', $tally{saves} / $tally{shotsAgainst} ) if( $tally{shotsAgainst} );
+        $tally{goalAgainstAverage} = sprintf( '%4.2f', ( 60*60 / $tally{timeOnIce} ) * $tally{goalsAgainst} ) if( $tally{timeOnIce} );
     } else {
         $tally{shotPct} = sprintf( '%0.1f', $tally{goals} / $tally{shots} * 100 ) if( $tally{shots} );
         #faceoffssssssss
@@ -2198,6 +2198,7 @@ sub StatsNHL {
         @cats = qw/games gamesStarted timeOnIce wins losses ot ties shutouts goalsAgainst goalAgainstAverage shotsAgainst saves savePercentage/;
     }
     foreach( @cats ) {
+        next if( ! $tally{$_} && /hits|pim|timeOnIce|blocked|Points|Started|shotsAgainst|save/ );
         if( /^(goals|assists|points|wins|losses)$/ ) {
             $statline .= " | " . uc substr( $1, 0, 1 ) }
         elsif( /^(pim|hits)$/ ) {
