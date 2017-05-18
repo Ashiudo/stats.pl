@@ -2214,7 +2214,7 @@ sub StatsNHL {
             use integer;
             if( $js->{primaryPosition}{abbreviation} ne 'G' ) {
                 $statline .= sprintf( " | TOI %d:%02d", $tally{$_} / 60 , $tally{$_} % 60 );
-                $statline .= sprintf( " | TOI/G %d:%02d", $tally{$_} / 60 / $tally{games}, ( $tally{$_} / $tally{games} ) % 60 );
+                $statline .= sprintf( " | TOI/G %d:%02d", $tally{$_} / 60 / $tally{games}, ( $tally{$_} / $tally{games} ) % 60 ) if( $tally{games} );
             } else {
                 $statline .= " | MIN " . ($tally{$_} / 60);
             }
@@ -2253,6 +2253,43 @@ sub StatsNHL {
     return @ret ? @ret : 'no stats found';
 
 }
+
+sub ScoresIIHF {
+    
+    my( $search, $date ) = SplitDate( shift, '%Y-%m-%d' );
+    if( !$date ) {
+        $date = "(?:" . GetDate( '6 hours ago', '%Y-%m-%d' ) . "|wm_live)";
+    }
+    print "ScoresIIHF: $search | $date\n" if( DEBUG );
+    
+    #<div id=\"date-2017-05-05\" class=\"game-day\"><div title=\"Click here to open Game Summary\" data-url=\"/en/games/2017-05-05/SWE-vs-RUS/\" class=\"played page-linker\">
+    #<div class=\"title\">Game Completed</div><div class=\"game\"><img src=\"http://s.widgets.iihf.hockey/Hydra/flags/30x22/SWE.png\" class=\"flag left\" alt=\"Sweden\" title=\"Sweden\"><span class=\"team left\">SWE</span>
+    #<span class=\"result active\">1 - 2</span>
+    #<span class=\"team right\">RUS</span><img src=\"http://s.widgets.iihf.hockey/Hydra/flags/30x22/RUS.png\" class=\"flag left\" alt=\"Russia\" title=\"Russia\"></div><div class=\"game-info\">
+    #<span class=\"game\">Preliminary Round - Group A Game 1</span><span class=\"venue\">LANXESS arena</span></div></div>
+    my( $data ) = download( 'http://d.widgets.iihf.hockey/Hydra/2017-WM/widget_en_2017_wm_scoreboard.html' );
+    
+    my @ret;
+    foreach( $data =~ m!.*?(data-url=\\"[^"]+?$date.*?</div></div>)!sg ) {
+        my( $team_left ) = /team left.*?>(.*?)</;
+        my( $team_right ) = /team right.*?>(.*?)</;
+        my( $full_left ) = /team left.*?<img.*?title=\\"(.*?)\\"/;
+        my( $full_right ) = /team left.*?<img.*?title=\\"(.*?)\\"/;
+        if( !$search || $search eq '*' || "$team_left $team_right $full_left $full_right" =~ /\Q$search\E/ ) {
+            my( $score_left, $score_right ) = /(\d+) - (\d+)/;
+            my $tmp = "$team_left $score_left $team_right $score_right";
+            BoldScore( $tmp );
+            $tmp .= " ( " . (/Game Completed/ ? "Final" : (/<span>LIVE<\/span>(.*?)</ ? $1 : "")) . " )";
+            push @ret, $tmp;
+        }
+    }
+    return @ret ? @ret : "no games found";
+        
+    #live live-game-linker\"><div class=\"title\"><span class=\"live-flag\"><span>LIVE</span>Period 1 Ended</span>
+}
+    
+    
+    
 
 sub ScoresTSN {
     print "ScoresTSN()\n" if( DEBUG );
@@ -2415,6 +2452,7 @@ sub Scores {
     my( $football, $url );
 
     return ScoresNHL( $params ) if( $league eq 'nhl' );
+    return ScoresIIHF( $params ) if( $league =~ /whc|iihf/ );
 
     my( $search, $date ) = SplitDate( $params, '%Y-%m-%d' );
     my @tmpscores = ScoresTSN( $league, $search, $date );
