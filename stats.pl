@@ -2269,13 +2269,13 @@ sub ScoresIIHF {
     #<span class=\"game\">Preliminary Round - Group A Game 1</span><span class=\"venue\">LANXESS arena</span></div></div>
     my( $data ) = download( 'http://d.widgets.iihf.hockey/Hydra/2017-WM/widget_en_2017_wm_scoreboard.html' );
     
-    my @ret;
+    my @ret; # lass=\"flag left\"
     foreach( $data =~ m!.*?(data-url=\\"[^"]+?$date.*?</div></div>)!sg ) {
         my( $team_left ) = /team left.*?>(.*?)</;
         my( $team_right ) = /team right.*?>(.*?)</;
-        my( $full_left ) = /team left.*?<img.*?title=\\"(.*?)\\"/;
-        my( $full_right ) = /team left.*?<img.*?title=\\"(.*?)\\"/;
-        if( !$search || $search eq '*' || "$team_left $team_right $full_left $full_right" =~ /\Q$search\E/ ) {
+        my( $full_left ) = /flag left.*?title=\\"(.*?)\\"/;
+        my( $full_right ) = /flag right.*?title=\\"(.*?)\\"/;
+        if( !$search || $search eq '*' || "$team_left $team_right $full_left $full_right" =~ /\Q$search\E/i ) {
             my( $score_left, $score_right ) = /(\d+) - (\d+)/;
             my $tmp = "$team_left $score_left $team_right $score_right";
             $tmp .= " ( " . (/Game Completed/ ? "Final" : (/<span>LIVE<\/span>(.*?)</ ? $1 : "")) . " )";
