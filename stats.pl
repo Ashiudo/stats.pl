@@ -231,7 +231,7 @@ sub event_privmsg {
     }
     elsif( /${t}ohl ?(.*)/ ) {
         @ret = OHL( $1 ); }
-    elsif( /${t}(?:[oan]hl|[nc]fl|nba|mlb|nc|qmj|oly|wj)/i ) {
+    elsif( /${t}(?:[oan]hl|[nc]fl|nba|mlb|nc|qmj|oly|wj|whc|iihf)/i ) {
         @ret = Scores( substr( $text, 1 ) ) if( !$scorebot );
         foreach( @ret ) { BoldScore( $_ ); }
     }
@@ -2278,7 +2278,6 @@ sub ScoresIIHF {
         if( !$search || $search eq '*' || "$team_left $team_right $full_left $full_right" =~ /\Q$search\E/ ) {
             my( $score_left, $score_right ) = /(\d+) - (\d+)/;
             my $tmp = "$team_left $score_left $team_right $score_right";
-            BoldScore( $tmp );
             $tmp .= " ( " . (/Game Completed/ ? "Final" : (/<span>LIVE<\/span>(.*?)</ ? $1 : "")) . " )";
             push @ret, $tmp;
         }
