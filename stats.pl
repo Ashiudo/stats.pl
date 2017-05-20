@@ -320,7 +320,7 @@ sub irssi_get_conf_cb {
     #Irssi::print("stats_conf reloaded from $file $hs_api_key");
 }
 
-use constant UA => "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.21 Safari/537.36";
+use constant UA => "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.96 Safari/537.36";
 sub zget{
     require LWP::UserAgent;
     require HTTP::Message;
@@ -347,11 +347,11 @@ sub curlhead {
 }
 
 sub lget {
-    my $extra = $httpref ? "-http.fake-referer '$httpref' -http.referer 2" : "";
-    $_ = shift;
-    $_ = `LD_PRELOAD='' links -receive-timeout 3 $extra -source '$_' 2>/dev/null | gunzip -f 2>/dev/null`;
-    $_ = "" if( length($_) < 200 && /404|Not Found/i );
-    return $_;
+    my $extra = "-http.fake-user-agent '" . UA . "'" . ($httpref ? " -http.fake-referer '$httpref' -http.referer 2" : "");
+    my $url = shift;
+    my $data = `LD_PRELOAD='' links -receive-timeout 3 $extra -source -address-preference 2 '$url' 2>/dev/null | gunzip -f 2>/dev/null`;
+    $data = "" if( length($data) < 200 && $data =~ /404|Not Found/i );
+    return $data;
 }
 
 sub links {
@@ -2255,6 +2255,31 @@ sub StatsNHL {
 }
 
 sub ScoresIIHF {
+    #{"n":"62","d":"2017-05-20","t":"19:15 GMT+2","v":"1","p":"SF","e":"2","h":"SWE","g":"FIN",},
+    
+    my( $search, $date ) = SplitDate( shift, '%Y-%m-%d' );
+    $date = GetDate( '6 hours ago', '%Y-%m-%d' ) if( !$date );
+    print "ScoresIIHF: $search | $date\n" if( DEBUG );
+    
+    my( $data ) = download( "http://d.widgets.iihf.hockey/Hydra/2017-WM/widget_en_2017_wm_tournament.js" );
+    $data =~ s/.*?games: \[(.*?)\].*/\1/s;
+    my @ret;
+    foreach( grep { /"d":"$date"/ } $data =~ /(\{.*?\})/sg ) {
+        my %g = simplejson( $_ );        
+        if( $g{e} == 7 ) {
+            my( $score_home, $score_away ) = $g{r} =~ /(\d+)-(\d+)/;
+            push @ret, "$g{g} $score_away $g{h} $score_home ( Final" . (int($g{s}) == 0 ? "/$g{s}" : "") . " )";
+        } elsif( $g{e} == 2 ) {
+            push @ret, "$g{g} @ $g{h} ( " . GetDate( $g{t}, '%I:%M%p ET' ) . " )";
+        } else {
+            push @ret, ScoresIIHFhtml( "$g{g} $g{h}", $date );
+        }
+    }
+    return @ret ? @ret : "no games found";
+
+}
+
+sub ScoresIIHFhtml {
     
     my( $search, $date ) = SplitDate( shift, '%Y-%m-%d' );
     if( !$date ) {
@@ -2268,17 +2293,16 @@ sub ScoresIIHF {
     #<span class=\"team right\">RUS</span><img src=\"http://s.widgets.iihf.hockey/Hydra/flags/30x22/RUS.png\" class=\"flag left\" alt=\"Russia\" title=\"Russia\"></div><div class=\"game-info\">
     #<span class=\"game\">Preliminary Round - Group A Game 1</span><span class=\"venue\">LANXESS arena</span></div></div>
     my( $data ) = download( 'http://d.widgets.iihf.hockey/Hydra/2017-WM/widget_en_2017_wm_scoreboard.html' );
-    
-    my @ret; # lass=\"flag left\"
-    foreach( $data =~ m!.*?(data-url=\\"[^"]+?$date.*?</div></div>)!sg ) {
+    my( @games ) = $data =~ m!.*?(data-url=\\"[^"]+?$date.*?</div></div>)!sg;
+    my @ret;
+    foreach( @games ) {
         my( $team_left ) = /team left.*?>(.*?)</;
         my( $team_right ) = /team right.*?>(.*?)</;
-        my( $full_left ) = /flag left.*?title=\\"(.*?)\\"/;
-        my( $full_right ) = /flag right.*?title=\\"(.*?)\\"/;
-        if( !$search || $search eq '*' || "$team_left $team_right $full_left $full_right" =~ /\Q$search\E/i ) {
-            my( $score_left, $score_right ) = /(\d+) - (\d+)/;
-            my $tmp = "$team_left $score_left $team_right $score_right";
-            $tmp .= " ( " . (/Game Completed/ ? "Final" : (/<span>LIVE<\/span>(.*?)</ ? $1 : "")) . " )";
+        my( @full_teams ) = /flag .*?title=\\"(.*?)\\"/sg;
+        if( !$search || $search eq '*' || "$team_right $team_left @full_teams" =~ /\Q$search\E/i ) {
+            my( $score_left, $score_right ) = /(\d+) - (\d+)/; #IIHF does home team on the left...meh
+            my $tmp = "$team_right $score_right $team_left $score_left ( ";
+            $tmp .= (/Game Completed/ ? "Final" : (/<span>LIVE<\/span>(.*?)</ ? $1 : "")) . " )";
             push @ret, $tmp;
         }
     }
