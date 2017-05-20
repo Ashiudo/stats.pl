@@ -347,13 +347,12 @@ sub curlhead {
 }
 
 sub lget {
-    my $extra = "-http.fake-user-agent '" . UA . "'" . ($httpref ? " -http.fake-referer '$httpref' -http.referer 2" : "");
     my $url = shift;
-    my $data = `LD_PRELOAD='' links -receive-timeout 3 $extra -source -address-preference 2 '$url' 2>/dev/null | gunzip -f 2>/dev/null`;
+    my $extra = "-http.fake-user-agent '" . UA . "'" . ($httpref ? " -http.fake-referer '$httpref' -http.referer 2" : "");    
+    my $data = `LD_PRELOAD='' links -receive-timeout 3 $extra -source -address-preference 3 '$url' 2>/dev/null | gunzip -f 2>/dev/null`;
     $data = "" if( length($data) < 200 && $data =~ /404|Not Found/i );
     return $data;
 }
-
 sub links {
     $_ = shift;
     return `LD_PRELOAD='' links -width 400 -receive-timeout 3 -dump '$_' 2>/dev/null`;
@@ -2256,21 +2255,24 @@ sub StatsNHL {
 
 sub ScoresIIHF {
     #{"n":"62","d":"2017-05-20","t":"19:15 GMT+2","v":"1","p":"SF","e":"2","h":"SWE","g":"FIN",},
+    #{"n":"55","d":"2017-05-16","t":"20:15 GMT+2","v":"1","p":"PRE","group":"A","e":"7","h":"GER","g":"LAT","r":"4-3","s":"GWS",},
     
     my( $search, $date ) = SplitDate( shift, '%Y-%m-%d' );
     $date = GetDate( '6 hours ago', '%Y-%m-%d' ) if( !$date );
+    my( $year ) = $date =~ /(....)/;
     print "ScoresIIHF: $search | $date\n" if( DEBUG );
     
-    my( $data ) = download( "http://d.widgets.iihf.hockey/Hydra/2017-WM/widget_en_2017_wm_tournament.js" );
-    $data =~ s/.*?games: \[(.*?)\].*/\1/s;
+    my( $data ) = download( "http://d.widgets.iihf.hockey/Hydra/${year}-WM/widget_en_${year}_wm_tournament.js" );
+    $data =~ s/.*?games: \[(.*?)\].*/$1/s;
     my @ret;
-    foreach( grep { /"d":"$date"/ } $data =~ /(\{.*?\})/sg ) {
+    foreach( grep { /"d":"$date/ } $data =~ /(\{.*?\})/sg ) {
         my %g = simplejson( $_ );        
         if( $g{e} == 7 ) {
             my( $score_home, $score_away ) = $g{r} =~ /(\d+)-(\d+)/;
-            push @ret, "$g{g} $score_away $g{h} $score_home ( Final" . (int($g{s}) == 0 ? "/$g{s}" : "") . " )";
+            push @ret, "$g{g} $score_away $g{h} $score_home ( Final" . ($g{s} == 3 ? "" : "/$g{s}") . " )";
         } elsif( $g{e} == 2 ) {
-            push @ret, "$g{g} @ $g{h} ( " . GetDate( $g{t}, '%I:%M%p ET' ) . " )";
+            foreach( $g{g}, $g{h} ) { $_ = "TBD" if( !$_ ) }
+            push @ret, "$g{g} @ $g{h} ( " . GetDate( $g{t}, '%-I:%M%p ET' ) . " )";
         } else {
             push @ret, ScoresIIHFhtml( "$g{g} $g{h}", $date );
         }
@@ -2282,17 +2284,16 @@ sub ScoresIIHF {
 sub ScoresIIHFhtml {
     
     my( $search, $date ) = SplitDate( shift, '%Y-%m-%d' );
-    if( !$date ) {
-        $date = "(?:" . GetDate( '6 hours ago', '%Y-%m-%d' ) . "|wm_live)";
-    }
-    print "ScoresIIHF: $search | $date\n" if( DEBUG );
+    $date = "(?:" . GetDate( '6 hours ago', '%Y-%m-%d' ) . "|wm_live)" if( !$date );
+    my( $year ) = $date =~ /...(....)/;
+    print "ScoresIIHFhtml: $search | $date\n" if( DEBUG );
     
     #<div id=\"date-2017-05-05\" class=\"game-day\"><div title=\"Click here to open Game Summary\" data-url=\"/en/games/2017-05-05/SWE-vs-RUS/\" class=\"played page-linker\">
     #<div class=\"title\">Game Completed</div><div class=\"game\"><img src=\"http://s.widgets.iihf.hockey/Hydra/flags/30x22/SWE.png\" class=\"flag left\" alt=\"Sweden\" title=\"Sweden\"><span class=\"team left\">SWE</span>
     #<span class=\"result active\">1 - 2</span>
     #<span class=\"team right\">RUS</span><img src=\"http://s.widgets.iihf.hockey/Hydra/flags/30x22/RUS.png\" class=\"flag left\" alt=\"Russia\" title=\"Russia\"></div><div class=\"game-info\">
     #<span class=\"game\">Preliminary Round - Group A Game 1</span><span class=\"venue\">LANXESS arena</span></div></div>
-    my( $data ) = download( 'http://d.widgets.iihf.hockey/Hydra/2017-WM/widget_en_2017_wm_scoreboard.html' );
+    my( $data ) = download( "http://d.widgets.iihf.hockey/Hydra/${year}-WM/widget_en_${year}_wm_scoreboard.html" );
     my( @games ) = $data =~ m!.*?(data-url=\\"[^"]+?$date.*?</div></div>)!sg;
     my @ret;
     foreach( @games ) {
@@ -2311,9 +2312,6 @@ sub ScoresIIHFhtml {
     #live live-game-linker\"><div class=\"title\"><span class=\"live-flag\"><span>LIVE</span>Period 1 Ended</span>
 }
     
-    
-    
-
 sub ScoresTSN {
     print "ScoresTSN()\n" if( DEBUG );
     my( $league, $search, $date ) = @_;
@@ -2475,7 +2473,7 @@ sub Scores {
     my( $football, $url );
 
     return ScoresNHL( $params ) if( $league eq 'nhl' );
-    return ScoresIIHF( $params ) if( $league =~ /whc|iihf/ );
+    #return ScoresIIHF( $params ) if( $league =~ /whc|iihf/ );
 
     my( $search, $date ) = SplitDate( $params, '%Y-%m-%d' );
     my @tmpscores = ScoresTSN( $league, $search, $date );
