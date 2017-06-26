@@ -380,14 +380,15 @@ sub FindTeam{
         'Edmonton Oilers','Florida Panthers','Los Angeles Kings','Minnesota Wild','Montreal Canadiens',
         'Nashville Predators','New Jersey Devils','New York Islanders','New York Rangers','Ottawa Senators',
         'Philadelphia Flyers','Arizona Coyotes','Pittsburgh Penguins','St. Louis Blues','San Jose Sharks',
-        'Tampa Bay Lightning','Toronto Maple Leafs','Vancouver Canucks','Washington Capitals','Winnipeg Jets'
+        'Tampa Bay Lightning','Toronto Maple Leafs','Vancouver Canucks','Washington Capitals','Winnipeg Jets',
+        'Vegas Golden Knights'
     );
     use constant abv => qw( 0_is_null
         ANA BOS BUF CGY CAR CHI COL CBJ DAL DET EDM FLA LAK MIN MTL
-        NSH NJD NYI NYR OTT PHI ARI PIT STL SJS TBL TOR VAN WSH WPG
+        NSH NJD NYI NYR OTT PHI ARI PIT STL SJS TBL TOR VAN WSH WPG VGK
     );
     my( $search, $forceabv ) = ( uc shift, shift );
-    return (teams)[ $search ] if( ($search =~ /^[1-9]+0?$/) && ($search <= 30) );
+    return (teams)[ $search ] if( ($search =~ /^[1-9]+0?$/) && ($search <= 31) );
     foreach( $search ) {
         return (abv)[13] if( /^LA$/ );
         return (abv)[15] if( /^(?:HABS|MON)/ );
@@ -402,15 +403,16 @@ sub FindTeam{
         return (abv)[26] if( /^(?:TB[^L]|BOLTS)/ );
         return (abv)[29] if( /^(?:WAS|CAPS)/ );
         return (abv)[30] if( /^WIN/ );
+        return (abv)[31] if( /VEGAS|^LAS|GOL|LV/ );
     }
-    for my $i ( 1 .. 30 ) {
+    for my $i ( 1 .. 31 ) {
         if( (abv)[$i] eq $search ) {
             return $forceabv ? (abv)[$i] : (teams)[$i];
         }
         return (abv)[$i] if( uc( (teams)[$i] ) eq $search );
     }
     $search =~ s/ //g;
-    for my $i ( 1 .. 30 ) {
+    for my $i ( 1 .. 31 ) {
         my( $nospace ) = uc( (teams)[$i] );
         $nospace =~ s/ //g;
         return (abv)[$i] if( $nospace =~ /\Q$search\E/ );
@@ -448,6 +450,7 @@ sub NHLTeamID { #NHL.com team id assignment
     elsif( /^TBL$/ ) { return 14 }
     elsif( /^TOR$/ ) { return 10 }
     elsif( /^VAN$/ ) { return 23 }
+    elsif( /^VGK$/ ) { return 54 }
     elsif( /^WSH$/ ) { return 15 }
     elsif( /^WPG$/ ) { return 52 }
     return 0;
@@ -1019,13 +1022,14 @@ sub GoalieStart{
 
 sub Eklund{
 
-    my $r = int( rand(30) ) + 1;
+    my $r = int( rand(31) ) + 1;
     my $team = FindTeam( $r );
-
+    print "Eklund r:$r team: $team\n" if( DEBUG );
     my $teamabv;
     if   ( $r == 13 ) { $teamabv = 'LA' }
     elsif( $r == 25 ) { $teamabv = 'SJ' } #stupid espn...
     elsif( $r == 26 ) { $teamabv = 'TB' }
+    elsif( $r == 31 ) { $teamabv = 'VGS'}
     else              { $teamabv = FindTeam( $team, 1 ) }
 
     my $data = download( "http://espn.go.com/nhl/teams/roster?team=$teamabv" );
@@ -1034,7 +1038,7 @@ sub Eklund{
     my( @teams, $i );
 
     for( $i = 0; $i < 3; ) {
-        my $t = int( rand( 30 ) ) + 1;
+        my $t = int( rand( 31 ) ) + 1;
         if(
             ( $t ne $r ) &&
             ( $i < 1 || $teams[0] ne $t ) &&
@@ -2432,10 +2436,10 @@ sub ScoresNHL {
     my( @ret, $liveonly );
 
     $date = GetDate( '-12 hours', '%Y-%m-%d' ) if( !$date );
-    if( $search eq '*' ) {
-        $search = '';
-    } elsif( !$search ) {
+    if( !$search ) {
         $liveonly = 1;
+    } elsif( $search eq '*' ) {
+        $search = '';
     }
 
     my( $data ) = download( "http://live.nhl.com/GameData/GCScoreboard/$date.jsonp", 1 ) =~ /loadScoreboard\(\{"games":\[(.+?)\]/s
