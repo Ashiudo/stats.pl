@@ -345,7 +345,8 @@ sub wget {
 }
 sub curlhead {
     my $url = shift;
-    return `LD_PRELOAD='' curl -I '$url' 2>/dev/null`;
+    my $UA = UA;
+    return `LD_PRELOAD='' curl -A '$UA' -I '$url' 2>/dev/null`;
 }
 
 sub lget {
@@ -2431,6 +2432,48 @@ sub ScoresTSN {
 } #ScoresTSN( )
 
 sub ScoresNHL {
+    
+    #http://statsapi.web.nhl.com/api/v1/schedule?startDate=2017-09-21&endDate=2017-09-21&expand=schedule.linescore,schedule.broadcasts.all
+    my( $search, $date ) = SplitDate( shift, '%Y-%m-%d' );
+    my( @ret, $js );
+    
+    $date = GetDate( '-12 hours', '%Y-%m-%d' ) if( !$date );    
+    my( $data ) = download( "http://statsapi.web.nhl.com/api/v1/schedule?startDate=$date&endDate=$date&expand=schedule.linescore,schedule.broadcasts.all", 1 );
+    eval { $js = decode_json( $data ) };
+    return "no games found for $date" if( $@ || ($js->{totalGames} == 0) );
+    
+    foreach(  @{ $js->{dates}->[0]->{games} } ) {
+        my @teams = ( $_->{teams}->{away}->{team}->{name}, $_->{teams}->{home}->{team}->{name} );
+        my @teamsabv = ( FindTeam( $teams[0], 1 ), FindTeam( $teams[1], 1 ) );
+        next if( $search && $search ne '*' && "@teams @teamsabv" !~ /\Q$search\E/i );
+        my $tmp = $teamsabv[0] . " ";
+        if ( $_->{status}{statusCode} < 3 ) {
+            #not started
+            $tmp .= "@ $teamsabv[1]" . GetDate( $_->{gameDate}, " ( %-I:%M %p %Z )" );
+        } else {
+            $tmp .= $_->{linescore}{teams}{away}{goals} . " " . $teamsabv[1] . " " . $_->{linescore}{teams}{home}{goals} . " ( ";
+            if( $_->{status}{statusCode} == 6 ) {
+                #game is final
+                $tmp .= "Final" . ( $_->{linescore}{currentPeriod} == 3 ? "" : "/" . $_->{linescore}{currentPeriodOrdinal} ) . " )";
+            } else {
+                $tmp .= $_->{linescore}{currentPeriodTimeRemaining} ." ". $_->{linescore}{currentPeriodOrdinal} . " )";
+            }
+        }
+        if( ( $_->{status}{statusCode} < 3 || $_->{status}{statusCode} != 6 ) && ( $#{ $_->{broadcasts} } >= 0 ) ) {
+            $tmp .= " [";
+            $tmp .= $_->{name} . "," foreach( @{ $_->{broadcasts} } );
+            $tmp =~ s/,$/\]/;
+        }
+                 
+        push @ret, $tmp;        
+        
+    }
+    
+    return ( @ret ? @ret : 'no results found' );
+    
+} #ScoresNHL()
+
+sub ScoresNHLold {
 
     my( $search, $date ) = SplitDate( shift, '%Y-%m-%d' );
     my( @ret, $liveonly );
@@ -2460,7 +2503,7 @@ sub ScoresNHL {
         }
     }
     return @ret ? @ret : 'No Results Found';
-} #ScoresNHL()
+} #ScoresNHLold()
 
 sub Scores {
 
