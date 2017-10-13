@@ -389,31 +389,31 @@ sub FindTeam{
         NSH NJD NYI NYR OTT PHI ARI PIT STL SJS TBL TOR VAN WSH WPG VGK
     );
     my( $search, $forceabv ) = ( uc shift, shift );
-    return (teams)[ $search ] if( ($search =~ /^[1-9]+0?$/) && ($search <= 31) );
+    return (teams)[ $search ] if( ($search =~ /^[1-9]+0?$/) && ($search < teams) );
     foreach( $search ) {
         return (abv)[13] if( /^LA$/ );
-        return (abv)[15] if( /^(?:HABS|MON)/ );
-        return (abv)[17] if( /^NJ/ );
+        return (abv)[15] if( /^(?:HABS|MON$)/ );
+        return (abv)[17] if( /^NJ$/ );
         return (abv)[18] if( /ISL[AE]/ );
         return (abv)[19] if( /RAN?G/ );
         return (abv)[20] if( /^SENS$/ );
-        return (abv)[22] if( /PH[OX]/ );
+        return (abv)[22] if( /PH[OX]$/ );
         return (abv)[23] if( /PGH|PENS/ );
         return (abv)[24] if( /LOUIS/ && $_ !~ /MART/ );
-        return (abv)[25] if( /^SJ/ );
+        return (abv)[25] if( /^SJ$/ );
         return (abv)[26] if( /^(?:TB[^L]|BOLTS)/ );
-        return (abv)[29] if( /^(?:WAS|CAPS)/ );
+        return (abv)[29] if( /^(?:WAS$|CAPS)/ );
         return (abv)[30] if( /^WIN/ );
         return (abv)[31] if( /VEGAS|^LAS|GOL|LV/ );
     }
-    for my $i ( 1 .. 31 ) {
+    for my $i ( 1 .. (teams - 1) ) {
         if( (abv)[$i] eq $search ) {
             return $forceabv ? (abv)[$i] : (teams)[$i];
         }
         return (abv)[$i] if( uc( (teams)[$i] ) eq $search );
     }
     $search =~ s/ //g;
-    for my $i ( 1 .. 31 ) {
+    for my $i ( 1 .. (teams - 1) ) {
         my( $nospace ) = uc( (teams)[$i] );
         $nospace =~ s/ //g;
         return (abv)[$i] if( $nospace =~ /\Q$search\E/ );
@@ -685,8 +685,8 @@ sub OHL {
             next if( "$Away $Home $AwayCode $HomeCode" !~ /\Q$search\E/i );
         }
 
-        if ($Clock == "0:00") { $Clock = "END" }
-        if ($Clock == "20:00") { $Clock = "START" }
+        if ($Clock eq "0:00") { $Clock = "END" }
+        if ($Clock eq "20:00") { $Clock = "START" }
 
         if ($StatusID == 1) {
             $GameStatus = "$Time $Zone";
@@ -974,9 +974,9 @@ sub Salary{
 my %goaliecache;
 sub GoalieStart{
 
-    my( $search, $date ) = SplitDate( shift, '%Y/%-m/%d/'  );
-    $date = GetDate( '-3 hours', '%Y/%-m/%d/' ) if( !$date );
-    my $url = "http://www2.dailyfaceoff.com/starting-goalies/$date";
+    my( $search, $date ) = SplitDate( shift, '%m-%d-%Y'  );
+    $date = GetDate( '-3 hours', '%m-%d-%Y' ) if( !$date );
+    my $url = "http://www.dailyfaceoff.com/starting-goalies/$date";
 
     $search = FindTeam( $search ) if( length( $search ) > 1 );
     $search = FindTeam( $search ) if( length( $search ) == 3 );
@@ -1003,7 +1003,9 @@ sub GoalieStart{
 
     for my $i ( 0 .. $#html ) {
         $_ = $html[$i];
-        my( $name, $team, $status ) = /<h5><a href.*?>(.*?)<.*?<span.*?alt=[\\"]+(.*?)[\\"].*?<dt.*?>(.*?)</s ;
+        my( $name, $team ) = /<h5><a href.*?>(.*?)<.*?<span.*?alt=[\\"]+(.*?)[\\"]/s;
+        my( $status ) = /.*?<dt.*?>(.*?)</ ? $1 : 'Unconfirmed (top of depth chart)';
+        print "$name | $team | $status\n" if( DEBUG );
         if( !$search || $team =~ /\Q$search\E/i ) {
             my( $link, $confby ) = /<p><a href="(.*?)".*?>(.*?)</s ;
             my $tmp = "$name $status";
@@ -2437,39 +2439,37 @@ sub ScoresNHL {
     my( $search, $date ) = SplitDate( shift, '%Y-%m-%d' );
     my( @ret, $js );
     
+    undef $search if( $search eq '*' );
     $date = GetDate( '-12 hours', '%Y-%m-%d' ) if( !$date );    
     my( $data ) = download( "http://statsapi.web.nhl.com/api/v1/schedule?startDate=$date&endDate=$date&expand=schedule.linescore,schedule.broadcasts.all", 1 );
     eval { $js = decode_json( $data ) };
-    return "no games found for $date" if( $@ || ($js->{totalGames} == 0) );
+    return "nhl.com error occured" if( $@  );    
     
-    foreach(  @{ $js->{dates}->[0]->{games} } ) {
+    foreach( @{ $js->{dates}->[0]->{games} } ) {
         my @teams = ( $_->{teams}->{away}->{team}->{name}, $_->{teams}->{home}->{team}->{name} );
         my @teamsabv = ( FindTeam( $teams[0], 1 ), FindTeam( $teams[1], 1 ) );
-        next if( $search && $search ne '*' && "@teams @teamsabv" !~ /\Q$search\E/i );
+        next if( $search && "@teams @teamsabv" !~ /\Q$search\E/i );
         my $tmp = $teamsabv[0] . " ";
-        if ( $_->{status}{statusCode} < 3 ) {
-            #not started
-            $tmp .= "@ $teamsabv[1]" . GetDate( $_->{gameDate}, " ( %-I:%M %p %Z )" );
+        if ( $_->{status}{statusCode} < 3 ) { #not started
+            $tmp .= GetDate( $_->{gameDate}, "@ $teamsabv[1] ( %-I:%M %p %Z )" );
         } else {
             $tmp .= $_->{linescore}{teams}{away}{goals} . " " . $teamsabv[1] . " " . $_->{linescore}{teams}{home}{goals} . " ( ";
-            if( $_->{status}{statusCode} == 6 ) {
-                #game is final
+            if( $_->{status}{statusCode} == 6 ) { #game is final
                 $tmp .= "Final" . ( $_->{linescore}{currentPeriod} == 3 ? "" : "/" . $_->{linescore}{currentPeriodOrdinal} ) . " )";
             } else {
                 $tmp .= $_->{linescore}{currentPeriodTimeRemaining} ." ". $_->{linescore}{currentPeriodOrdinal} . " )";
             }
         }
         if( ( $_->{status}{statusCode} < 3 || $_->{status}{statusCode} != 6 ) && ( $#{ $_->{broadcasts} } >= 0 ) ) {
-            $tmp .= " [";
             $tmp .= $_->{name} . "," foreach( @{ $_->{broadcasts} } );
-            $tmp =~ s/,$/\]/;
+            $tmp =~ s/\)(.*?),$/\) \[$1\]/;
         }
                  
         push @ret, $tmp;        
         
     }
     
-    return ( @ret ? @ret : 'no results found' );
+    return ( @ret ? @ret : ( $search ? 'no matching results' : "no games on $date" ) );
     
 } #ScoresNHL()
 
