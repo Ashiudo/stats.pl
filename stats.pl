@@ -392,7 +392,7 @@ sub FindTeam{
     return (teams)[ $search ] if( ($search =~ /^[1-9]+0?$/) && ($search < teams) );
     foreach( $search ) {
         return (abv)[13] if( /^LA$/ );
-        return (abv)[15] if( /^(?:HABS|MON$)/ );
+        return (abv)[15] if( /^(?:HABS|MON)/ );
         return (abv)[17] if( /^NJ$/ );
         return (abv)[18] if( /ISL[AE]/ );
         return (abv)[19] if( /RAN?G/ );
@@ -401,8 +401,8 @@ sub FindTeam{
         return (abv)[23] if( /PGH|PENS/ );
         return (abv)[24] if( /LOUIS/ && $_ !~ /MART/ );
         return (abv)[25] if( /^SJ$/ );
-        return (abv)[26] if( /^(?:TB[^L]|BOLTS)/ );
-        return (abv)[29] if( /^(?:WAS$|CAPS)/ );
+        return (abv)[26] if( /^(?:TB($|[^L])|BOLTS)/ );
+        return (abv)[29] if( /^(?:WAS|CAPS)/ );
         return (abv)[30] if( /^WIN/ );
         return (abv)[31] if( /VEGAS|^LAS|GOL|LV/ );
     }
@@ -1104,9 +1104,9 @@ sub StatsTeam{
     my $search = shift;
     my $season = $search =~ /(\d{4})/ ? $1 + 1 : GetDate( 'now + 3 months', '%Y' );
     $search =~ s/\s|\d//g;
-    $search = FindTeam( $search );
-    $search = FindTeam( $search ) if( length( $search ) != 3 );
+    $search = FindTeam( $search, 1 );
     return 'tstats <team> [season]' if( length($search) != 3 );
+    $search = 'VEG' if( $search eq 'VGK' ); #dumbasses
 
     print "Looking up team: $search season: " . ($season-1) . "-$season\n" if( DEBUG );
     my $data = download( "http://www.hockey-reference.com/leagues/NHL_$season.html" );
@@ -2454,13 +2454,13 @@ sub ScoresNHL {
             $tmp .= GetDate( $_->{gameDate}, "@ $teamsabv[1] ( %-I:%M %p %Z )" );
         } else {
             $tmp .= $_->{linescore}{teams}{away}{goals} . " " . $teamsabv[1] . " " . $_->{linescore}{teams}{home}{goals} . " ( ";
-            if( $_->{status}{statusCode} == 6 ) { #game is final
+            if( $_->{status}{statusCode} >= 6 ) { #game is final
                 $tmp .= "Final" . ( $_->{linescore}{currentPeriod} == 3 ? "" : "/" . $_->{linescore}{currentPeriodOrdinal} ) . " )";
             } else {
                 $tmp .= $_->{linescore}{currentPeriodTimeRemaining} ." ". $_->{linescore}{currentPeriodOrdinal} . " )";
             }
         }
-        if( ( $_->{status}{statusCode} < 3 || $_->{status}{statusCode} != 6 ) && ( $#{ $_->{broadcasts} } >= 0 ) ) {
+        if( $_->{status}{statusCode} < 6 && $#{ $_->{broadcasts} } >= 0 ) {
             $tmp .= $_->{name} . "," foreach( @{ $_->{broadcasts} } );
             $tmp =~ s/\)(.*?),$/\) \[$1\]/;
         }
