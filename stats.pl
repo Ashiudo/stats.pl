@@ -1126,6 +1126,58 @@ sub StatsTeam{
 }
 
 sub LeadersNHL {
+    
+    #http://www.nhl.com/stats/rest/leaders new json rest api
+    my $cat = lc( shift );
+    my $i = 0;
+    my @cats = qw!    p($|[^l]) g($|o)  a       plus|\+   ga  s[av]          w    s[oh]!;
+    my @catnames = qw(points    goals   assists plusMinus gaa savePercentage wins shutout);
+    foreach( @cats ) {
+        last if( $cat =~ /^$_/ );
+        $i++;
+    }
+    
+    if( $i == @cats ) {
+        return "Valid categories: \x035P\x03oints \x035G\x03oals \x035A\x03ssists " .
+            "\x035+\x03/- \x035GAA\x03 \x035SV\x03% \x035W\x03ins \x035Sh\x03utouts";
+    }
+
+    my $data = download( 'http://www.nhl.com/stats/rest/leaders' );
+    my $js;
+    eval '$js = decode_json( $data )';
+    return 'nhl.com error' if( $@ );
+    
+    $js = $i <= 3 ? $js->{skater} : $js->{goalie};
+    foreach( @{ $js } ) {
+        if( $_->{measure} eq $catnames[$i] ) {
+            $js = $_;
+            last;
+        }
+    }
+    
+    print "usin cat $js->{measure}\n" if( DEBUG );
+    
+    my @ret = "Top 5 " . uc $catnames[$i];
+    my @sorted = sort { $a->{listIndex} gt $b->{listIndex } } @{ $js->{leaders} };
+    
+    my( $maxlen, @players ) = 0;
+    for my $c ( 0 .. 4 ) {
+        $players[$c] = $sorted[$c]->{'fullName'};
+        $players[$c] =~ s/(.).*? /$1\. /;
+        $maxlen = length( $players[$c] ) if( length( $players[$c] ) > $maxlen );
+    }
+    
+    for my $j ( 0 .. 4 ) {
+        push @ret, sprintf "%d. %-${maxlen}s [%s] \x02%s\x02",
+            $j + 1, $players[$j], $sorted[$j]->{'tricode'}, $sorted[$j]->{'valueLabel'};
+    }
+
+    return ($#ret == 5 ? @ret : "error occured");
+
+}
+    
+
+sub LeadersNHLold {
     my $cat = lc( shift );
     my $i = 0;
     my @cats = qw!    p($|[^l]) g($|o)  a       plus|\+   ga  s[av]          w    s[oh]!;
