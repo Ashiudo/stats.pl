@@ -1126,8 +1126,7 @@ sub StatsTeam{
 }
 
 sub LeadersNHL {
-    
-    #http://www.nhl.com/stats/rest/leaders new json rest api
+
     my $cat = lc( shift );
     my $i = 0;
     my @cats = qw!    p($|[^l]) g($|o)  a       plus|\+   ga  s[av]          w    s[oh]!;
@@ -1142,13 +1141,12 @@ sub LeadersNHL {
             "\x035+\x03/- \x035GAA\x03 \x035SV\x03% \x035W\x03ins \x035Sh\x03utouts";
     }
 
-    my $data = download( 'http://www.nhl.com/stats/rest/leaders' );
+    my $data = download( 'http://www.nhl.com/stats/rest/leaders' ); # new json rest api
     my $js;
     eval '$js = decode_json( $data )';
     return 'nhl.com error' if( $@ );
     
-    $js = $i <= 3 ? $js->{skater} : $js->{goalie};
-    foreach( @{ $js } ) {
+    foreach( @{ $i < 4 ? $js->{skater} : $js->{goalie} } ) {
         if( $_->{measure} eq $catnames[$i] ) {
             $js = $_;
             last;
@@ -2237,8 +2235,8 @@ sub StatsNHL {
             . " in $js->{birthCity}, " . ($js->{birthStateProvince} ? "$js->{birthStateProvince}, " : "") . $js->{birthCountry};
 
         eval {
-            my $url = "http://www.nhl.com/stats/rest/grouped/skaters/basic/season/bios?cayenneExp=playerId=$nhlid";
-            $url =~ s!skater.*?bio!goalies/goalie_basic/season/goaliebio! if( $js->{primaryPosition}{abbreviation} eq 'G' );
+            my $url = "http://www.nhl.com/stats/rest/skaters?reportType=basic&reportName=bios&cayenneExp=playerId=$nhlid";
+            $url =~ s/skaters/goalies/ if( $js->{primaryPosition}{abbreviation} eq 'G' );
             my $bio = decode_json( download( $url, 1 ) );
             if( $bio = $bio->{data}->[0] ) {
                 my $draft = $bio->{playerDraftYear} ? "Drafted $bio->{playerDraftYear} Rd $bio->{playerDraftRoundNo} (\#$bio->{playerDraftOverallPickNo} overall)" : "Undrafted";
@@ -2282,7 +2280,7 @@ sub StatsNHL {
         $tally{shotPct} = sprintf( '%0.1f', $tally{goals} / $tally{shots} * 100 ) if( $tally{shots} );
         #faceoffssssssss
         eval {
-            my $fo = decode_json( download( "http://www.nhl.com/stats/rest/grouped/skaters/basic/season/faceoffs?cayenneExp=playerId=$nhlid%20and%20gameTypeId=" .($playoffs ? "3" : "2"). ($year >= 0 ? "%20and%20seasonId=$season" : ""), 1 ) );
+            my $fo = decode_json( download( "http://www.nhl.com/stats/rest/skaters?reportType=basic&reportName=faceoffs&cayenneExp=playerId=$nhlid%20and%20gameTypeId=" .($playoffs ? "3" : "2"). ($year >= 0 ? "%20and%20seasonId=$season" : ""), 1 ) );
             foreach( @{ $fo->{data} } ) {
                 $tally{faceOffWins} += $_->{faceoffsWon};
                 $tally{faceOffLosses} += $_->{faceoffsLost};
