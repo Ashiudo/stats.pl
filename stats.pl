@@ -975,13 +975,12 @@ my %goaliecache;
 sub GoalieStart{
 
     my( $search, $date ) = SplitDate( shift, '%m-%d-%Y'  );
-    $date = GetDate( '-3 hours', '%m-%d-%Y' ) if( !$date );
-    my $url = "http://www.dailyfaceoff.com/starting-goalies/$date";
+    #$date = GetDate( '-3 hours', '%m-%d-%Y' ) if( !$date );
+    my $url = "https://www.dailyfaceoff.com/starting-goalies/$date";
 
     $search = FindTeam( $search ) if( length( $search ) > 1 );
     $search = FindTeam( $search ) if( length( $search ) == 3 );
     return 'usage: goalie <team> [date]' if( !$search );
-    $search = '' if( $search eq '*' );
     print "Goalie( search: $search )\n" if( DEBUG );
 
     my $data;
@@ -996,30 +995,20 @@ sub GoalieStart{
         $data = $goaliecache{data};
     }
     return "error getting data, website down? $url" if( !$data );
-    my @html = $data =~ /<div class="goalie(.*?)<\/div>/sg;
-    my @teams = $data =~ /<h4>(.*?)</sg;
-    my @dates = $data =~ /<div class="date">(.*?)</sg;
+    my @games = $data =~ /<div class="stat-card-main-heading"(.*?)(?:"starting-goalies-card stat-card"|$)/sg;
     my @ret;
 
-    for my $i ( 0 .. $#html ) {
-        $_ = $html[$i];
-        my( $name, $team ) = /<h5><a href.*?>(.*?)<.*?<span.*?alt=[\\"]+(.*?)[\\"]/s;
-        my( $status ) = /.*?<dt.*?>(.*?)</ ? $1 : 'Unconfirmed (top of depth chart)';
-        print "$name | $team | $status\n" if( DEBUG );
-        if( !$search || $team =~ /\Q$search\E/i ) {
-            my( $link, $confby ) = /<p><a href="(.*?)".*?>(.*?)</s ;
-            my $tmp = "$name $status";
-            $tmp .= " by $confby - " . (length($link) > 70 ? shorturl($link) : $link) if( $status eq 'Confirmed' );
-            if( $teams[$i/2] =~ /(.*?) at (.*)/ ) {
-                $tmp .= sprintf( ($i&1 ? " (%s@\x02%s\x02" : " (\x02%s\x02@%s"), FindTeam($1), FindTeam($2) );
-                $tmp .= " $1 ET)" if( $dates[$i/2] =~ /20\d+ (.*)/ );
-            }
-            push @ret, $tmp;
-        }
+    foreach( @games ) {
+        my @team = /"top-heading-heavy">(.*?) at (.*?)</s;
+        my $home = $2 eq $search ? 1 : 0;
+        next if( "$1 $2" !~ /\Q$search\E/i );
+        my @name = /class="goalie-info.*?<h4>(.*?)</sg;
+        my @status = /h5 class="news-strength.*?(\w+)\s*<\/h5>/sg;
+        my( $time ) = /game-time">\s*(\d+.*?)\s\s/s;
+        push @ret, "$name[$home] is $status[$home] (" . FindTeam($team[0],1) . " @ " . FindTeam($team[1],1) . ", $time)";
     }
 
-    return 'No game found' if( !@ret );
-    return @ret;
+    return @ret ? @ret : 'No game found';
 
 } #GoalieStart
 
