@@ -515,7 +515,7 @@ sub SchedNHL {
 
     my $season = GetDate( '8 months ago', "%Y" );
     my $today = GetDate( 'today', "%Y-%m-%d" );
-    my $url = "http://statsapi.web.nhl.com/api/v1/schedule?expand=schedule.teams,schedule.linescore,schedule.decisions";
+    my $url = "http://statsapi.web.nhl.com/api/v1/schedule?expand=schedule.teams,schedule.linescore";
     $url .= "&startDate=" . ($index < 1 ? "$season-10-01&endDate=$today" : "$today&endDate=" . ($season+1) . "-07-01");
 
     my $nhlid = NHLTeamID( $team );
@@ -1218,20 +1218,23 @@ sub getASCII {
 sub FindGameID {
     my( $team, $date ) = ( \$_[0], $_[1] );
 
-    $$team = FindTeam( $$team );
-    $$team = FindTeam( $$team ) if( length( $$team ) != 3 );
+    $$team = FindTeam( $$team, 1 );
     my( $ret) = 0;
     if( $date ) {
         $date = GetDate( $date, '%Y-%m-%d' );
-        ($_) = download( "http://live.nhl.com/GameData/GCScoreboard/$date.jsonp" ) =~ /loadScoreboard\(\{"games":\[(.+?)\]/s
-            or return ();
-
-        while( /\{(.*?)\}/sg ) {
-            my %js = simplejson( $+ );
-            if( $$team eq $js{hta} || $$team eq $js{ata} ) {
-                return( $js{id}, \%js );
+        #http://statsapi.web.nhl.com/api/v1/schedule?startDate=2017-09-21&endDate=2017-09-21
+        my $data = download( "http://statsapi.web.nhl.com/api/v1/schedule?startDate=$date&endDate=$date&expand=schedule.linescore" );
+        my $js;
+        eval '$js = decode_json( $data )';
+        return $ret if( $@ );
+        
+        foreach( @{ $js->{dates}->[0]->{games} } ) {
+            if( "$_->{teams}{away}{team}{name} $_->{teams}{home}{team}{name}" =~ FindTeam( $$team ) ) {
+                $js = $_;
+                return( $js->{gamePk}, $js );
             }
         }
+        
     } else {
         if( !$GD{scoreboardtime} || (time > $GD{scoreboardtime}) ) {
             return if( GstatsUpdate() == 0 );
@@ -1319,8 +1322,8 @@ sub GoalVid {
     my @goals = grep{ $_->{type} =~ /GOAL/i && $_->{teamId} == $nhlteamid } @{$json->{media}{milestones}{items}};
     @goals = sort{ $a->{timeOffset} <=> $b->{timeOffset} } @goals;
     if( $index > @goals ) {
-        my $home = $js->{ata} eq $team;
-        return "Goal not found" if( $js->{bs} eq 'FINAL' || ($index > $js->{$home ? 'hts' : 'ats'} + 2) );
+        my $home = FindTeam( $js->{teams}{home}{team}{name} ) eq $team;
+        return "Goal not found" if( $js->{status}{statusCode} >= 5 || ($index > $js->{teams}{$home ? 'home' : 'away'}{score} + 2) );
         return "!!display it $team $index";
     }
     my $goal = $goals[$index - 1];
