@@ -938,6 +938,7 @@ sub Salary{
                 if( $salary gt $top ) {
                     $top = $salary;
                     $url = "http://www.capfriendly.com/players/$name";
+                    last;
                 }
             }
         }
