@@ -214,7 +214,7 @@ sub event_privmsg {
     elsif( /${t}hls/ ) {
         @ret = 'Get an HLS player for your browser like this one: https://chrome.google.com/webstore/detail/native-hls-playback/emnphkkblegpebimobpbekeedfgemhof?hl=en-US or https://addons.mozilla.org/en-US/firefox/addon/native_hls_playback/'; }
     elsif( /${t}help$/ ) {
-        @ret = 'http://ash.pwnz.org/haaalp.txt';
+        @ret = 'http://192.95.27.97/haaalp.txt';
     }
     elsif( /${t}ragewings$/ ) {
         return; # if( (lc($target) !~ /#(nhl|hockey|pens)/) || ($fp{"rw$server"} > time) || ($scorebot == 1) );
@@ -1321,6 +1321,16 @@ sub GoalVid {
     $nhlteamid = NHLTeamID( $team );
 
     my @goals = grep{ $_->{type} =~ /GOAL/i && $_->{teamId} == $nhlteamid } @{$json->{media}{milestones}{items}};
+    
+    for( my $i = $#goals; $i >= 0; $i-- ) {
+        for my $j ( 0 .. $#goals ) {
+            if( $j ne $i && $goals[$i]->{statsEventId} eq $goals[$j]->{statsEventId} ) {
+                splice( @goals, $i, 1 );
+                last;
+            }
+        }
+    }
+    
     @goals = sort{ $a->{timeOffset} <=> $b->{timeOffset} } @goals;
     if( $index > @goals ) {
         my $home = FindTeam( $js->{teams}{home}{team}{name} ) eq $team;
@@ -1340,15 +1350,14 @@ sub GoalVid {
         @playbacks = sort { $b->{height} <=> $a->{height} } grep { $_->{height} && ($_->{height} ne 'null') } @playbacks;
     }
 
-    #my( $url ) = to_json( $goal, {pretty => 1} ) =~ /(http:.*?1800k\.mp4)/; #easy...lazy?
     my $url = $playbacks[0]->{url};
     $url = shorturl( $url ) if( !DEBUG );
     return "error goal not found" if( !$url );
 
     my $desc = "$goal->{highlight}{title} $goal->{highlight}{blurb} $goal->{highlight}{description}";
-    my $extra = $desc =~ /(PPG|SHG)/i ? " [" . uc $1 . "]" : "";
+    my $extra = $desc =~ /(PPG|SHG)/i ? " " . uc $1 : "";
 
-    return "$url | $goal->{description} [$goal->{periodTime}/$goal->{ordinalNum}]$extra";
+    return "$url | $goal->{description} [$goal->{periodTime}/$goal->{ordinalNum}$extra] $goal->{highlight}{description}";
 
 }
 
