@@ -1299,6 +1299,59 @@ sub GoalSearch {
     return "$vids[$#vids] - $sorted[$index]->{title}"; # . ( $data =~ /powerPlayGoal/ ? " [PPG]" : $data =~ /shorthandedGoal/ ? " [SHG]" : "" );
 }
 
+
+sub GoalVidOld {
+
+    my( $fullid, $team, $index, $date ) = @_;
+    my( $url, $vidurl, $ret );
+
+    $url = "http://live.nhl.com/GameData/$1" .($1+1). "/$fullid/PlayByPlay.json";
+    my( $season, $gameid ) = ("$1$2",int($3)) if( $url =~ /GameData\/..(..)..(..)\/......(\d+)/ );
+
+    $_ = download( $url );
+    my %pbp;
+    $pbp{"$1t$2"} = $3 while( /"(?|(a)way|(h)ome)team(?|(id)|(n)ame)":(?|"(.*?)"|(\d+))/sg );
+    my( @teams ) = ( FindTeam($pbp{atn}), FindTeam($pbp{htn}) );
+    my( $teamid ) = ( $teams[0] eq $team ? $pbp{atid} : $pbp{htid} );
+    my( $count, %js );
+    while( /\{([^\}]+?"type":"Goal".*?)\}/sg ) {
+        %js = simplejson( $1 );
+        last if( $js{teamid} == $teamid && ++$count == $index );
+    }
+    return "error goal not found" if( $index != $count );
+
+    $date = GetDate( ($date ? $date : '-12 hours'), '%Y/%m/%d' );
+    for( my $ol = 1; $ol < 3 && !$vidurl; $ol++ ) {
+        for( my $il = 1; $il < 3 && !$vidurl; $il++ ) {
+            $url = "http://e1.cdnak.neulion.com/nhl/vod/$date/$gameid/" . substr( $fullid, 5, 1 )
+                . "_${gameid}_" . lc( $teams[0] ) . "_" . lc( $teams[1] ) . "_${season}_" . ($il == 1 ? 'h' : 'a') . "_discrete_"
+                . ($teams[1] =~ /LAK|NJD|SJS|TBL/ ? substr( $teams[1], 0, 1 ) . "." . substr( $teams[1], 1, 1 ) : $teams[1])
+                . $js{eventid} . "_goal_" . $ol . "_1600.mp4";
+            $vidurl = $url if( curlhead($url) =~ /200 OK/ );
+        }
+    }
+
+    if( !$vidurl ) {
+        for my $ha ( 0 .. 1 ) {
+            $_ = download( "http://video.nhl.com/videocenter/servlets/playlist?ids=${fullid}-$js{eventid}-" . ($ha == 0 ? "h" : "a") . "&format=json", 1 );
+            $vidurl = /publishpoint":"(.+?)"/i ? $1 : "";
+            $ret = $1 if( /"name":"((?! Goal on  ).+?)"/i );
+            last if( $vidurl );
+        }
+    }
+    return "error video not ready yet" if( !$vidurl );
+
+    if( !$ret ) {
+        my @per = qw( 1st 2nd 3rd OT );
+        $ret = $js{desc} . " @ $js{time}/" . ( $js{period} < 5 ? $per[$js{period}-1] : $js{period}-3 . "OT" );
+    }
+    my @oi = ( scalar split(",",$js{aoi}), scalar split(",",$js{hoi}) );
+    $ret .= ($oi[0] > $oi[1] ? ($teamid == $pbp{atid} ? " PP" : " SH") : ($teamid == $pbp{htid} ? " PP" : " SH")) if( $oi[0] != $oi[1] );
+    $ret .= sprintf( " [%s " . ($teams[0] eq $team ? "\x02%d\x02 %s %d]" : "%d %s \x02%d\x02]"), $teams[0], $js{as}, $teams[1], $js{hs} );
+    $vidurl = shorturl( $vidurl ) if( !DEBUG );
+    return "$ret $vidurl";
+} #GoalVidOld()
+
 sub GoalVid {
 
     my( $params, $hq ) = @_;
@@ -1361,58 +1414,6 @@ sub GoalVid {
 
 }
 
-sub GoalVidOld {
-
-    my( $fullid, $team, $index, $date ) = @_;
-    my( $url, $vidurl, $ret );
-
-    $url = "http://live.nhl.com/GameData/$1" .($1+1). "/$fullid/PlayByPlay.json";
-    my( $season, $gameid ) = ("$1$2",int($3)) if( $url =~ /GameData\/..(..)..(..)\/......(\d+)/ );
-
-    $_ = download( $url );
-    my %pbp;
-    $pbp{"$1t$2"} = $3 while( /"(?|(a)way|(h)ome)team(?|(id)|(n)ame)":(?|"(.*?)"|(\d+))/sg );
-    my( @teams ) = ( FindTeam($pbp{atn}), FindTeam($pbp{htn}) );
-    my( $teamid ) = ( $teams[0] eq $team ? $pbp{atid} : $pbp{htid} );
-    my( $count, %js );
-    while( /\{([^\}]+?"type":"Goal".*?)\}/sg ) {
-        %js = simplejson( $1 );
-        last if( $js{teamid} == $teamid && ++$count == $index );
-    }
-    return "error goal not found" if( $index != $count );
-
-    $date = GetDate( ($date ? $date : '-12 hours'), '%Y/%m/%d' );
-    for( my $ol = 1; $ol < 3 && !$vidurl; $ol++ ) {
-        for( my $il = 1; $il < 3 && !$vidurl; $il++ ) {
-            $url = "http://e1.cdnak.neulion.com/nhl/vod/$date/$gameid/" . substr( $fullid, 5, 1 )
-                . "_${gameid}_" . lc( $teams[0] ) . "_" . lc( $teams[1] ) . "_${season}_" . ($il == 1 ? 'h' : 'a') . "_discrete_"
-                . ($teams[1] =~ /LAK|NJD|SJS|TBL/ ? substr( $teams[1], 0, 1 ) . "." . substr( $teams[1], 1, 1 ) : $teams[1])
-                . $js{eventid} . "_goal_" . $ol . "_1600.mp4";
-            $vidurl = $url if( curlhead($url) =~ /200 OK/ );
-        }
-    }
-
-    if( !$vidurl ) {
-        for my $ha ( 0 .. 1 ) {
-            $_ = download( "http://video.nhl.com/videocenter/servlets/playlist?ids=${fullid}-$js{eventid}-" . ($ha == 0 ? "h" : "a") . "&format=json", 1 );
-            $vidurl = /publishpoint":"(.+?)"/i ? $1 : "";
-            $ret = $1 if( /"name":"((?! Goal on  ).+?)"/i );
-            last if( $vidurl );
-        }
-    }
-    return "error video not ready yet" if( !$vidurl );
-
-    if( !$ret ) {
-        my @per = qw( 1st 2nd 3rd OT );
-        $ret = $js{desc} . " @ $js{time}/" . ( $js{period} < 5 ? $per[$js{period}-1] : $js{period}-3 . "OT" );
-    }
-    my @oi = ( scalar split(",",$js{aoi}), scalar split(",",$js{hoi}) );
-    $ret .= ($oi[0] > $oi[1] ? ($teamid == $pbp{atid} ? " PP" : " SH") : ($teamid == $pbp{htid} ? " PP" : " SH")) if( $oi[0] != $oi[1] );
-    $ret .= sprintf( " [%s " . ($teams[0] eq $team ? "\x02%d\x02 %s %d]" : "%d %s \x02%d\x02]"), $teams[0], $js{as}, $teams[1], $js{hs} );
-    $vidurl = shorturl( $vidurl ) if( !DEBUG );
-    return "$ret $vidurl";
-} #GoalVid()
-
 sub GoalQueue {
     my $params = shift;
     my %h = %$params;
@@ -1449,7 +1450,7 @@ sub GoalCheck {
             if( exists &weechat::command ) {
                 weechat::command( $GQ{check}[$i]{buffer}, $msg );
             } else {
-                $GQ{check}[$i]{shash}->command( "msg $msg" );
+                $GQ{check}[$i]{shash}->command( "msg $GQ{check}[$i]{target} $msg" );
             }
         }
         splice @{ $GQ{check} }, $i, 1;
