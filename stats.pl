@@ -9,8 +9,8 @@ use constant {
 no warnings 'experimental';
 BEGIN { $^W = 0 }; #disable warnings
 
-our $httpref;
-our $t = qr/^\./; #trigger
+my $httpref;
+my $t = qr/^\./; #trigger
 
 if( exists &weechat::register ) {
     my $SCRIPT_NAME = "sportsstatsbot";
@@ -341,7 +341,7 @@ sub zget{
 sub wget {
     my( $url, $extra ) = @_;
     my $UA = UA;
-    return `LD_PRELOAD='' wget -t 3 -T 3 --no-proxy -q -O - '$url' -U '$UA' $extra 2>/dev/null`;
+    return `LD_PRELOAD='' wget -t 3 -T 3 -q -O - '$url' -U '$UA' $extra 2>/dev/null`;
 }
 sub curlhead {
     my $url = shift;
@@ -353,7 +353,7 @@ sub lget {
     my $url = shift;
     my $extra = "-http.fake-user-agent '" . UA . "'" . ($httpref ? " -http.fake-referer '$httpref' -http.referer 2" : "");    
     my $data = `LD_PRELOAD='' links -receive-timeout 3 $extra -source -address-preference 3 '$url' 2>/dev/null | gunzip -f 2>/dev/null`;
-    $data = "" if( length($data) < 200 && $data =~ /404|Not Found/i );
+    $data = "" if( length($data) < 200 && $data =~ /40[0-9]|Not Found/i );
     return $data;
 }
 sub links {
@@ -369,10 +369,10 @@ sub GetDate {
 }
 
 #globals
-our %fp;
-our %fl;
-our %GD;
-our %GQ; #goalqueue
+my %fp;
+my %fl;
+my %GD;
+my %GQ; #goalqueue
 
 sub FindTeam{
     use constant teams => ( '0 is null',
@@ -457,7 +457,7 @@ sub NHLTeamID { #NHL.com team id assignment
     return 0;
 } #NHLTeamID
 
-our %httpcache;
+my %httpcache;
 sub download {
     no warnings;
     my( $url, $nocache ) = @_;
@@ -465,15 +465,16 @@ sub download {
     return lget( $url ) if( $nocache );
     my $t = time;
     for my $c ( 1 .. 5 ) {
-        if( $t >= $httpcache{$c}{timer} && $httpcache{$c}{url} ) {
-            $httpcache{$c}{url} = "";
-            $httpcache{$c}{data} = "";
+        if( $httpcache{$c}{url} && $t >= $httpcache{$c}{timer} ) {
+            undef $httpcache{$c}{url};
+            undef $httpcache{$c}{data};
             $httpcache{$c}{timer} = 0;
         }
     }
     for my $c ( 1 .. 5 ) {
         if( $httpcache{$c}{url} eq $url ) {
             $httpcache{hits}++;
+            $httpcache{$c}{timer} = time + 30;
             return $httpcache{$c}{data};
         }
     }
@@ -1009,6 +1010,7 @@ sub GoalieStart{
         push @ret, "$name[$home] is $status[$home] (" . FindTeam($team[0],1) . " @ " . FindTeam($team[1],1) . ", $time)";
     }
 
+    %goaliecache = () if( ! @ret ); #lets clear the cache, this site has problems...        
     return @ret ? @ret : 'No game found';
 
 } #GoalieStart
