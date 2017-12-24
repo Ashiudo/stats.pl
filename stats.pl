@@ -9,8 +9,8 @@ use constant {
 no warnings 'experimental';
 BEGIN { $^W = 0 }; #disable warnings
 
-my $httpref;
-my $t = qr/^\./; #trigger
+our $httpref;
+our $t = qr/^\./; #trigger
 
 if( exists &weechat::register ) {
     my $SCRIPT_NAME = "sportsstatsbot";
@@ -299,7 +299,7 @@ sub event_privmsg {
     }
 }
 
-my $hs_api_key;
+our $hs_api_key;
 sub weechat_get_conf_cb {
     $hs_api_key = weechat::config_get_plugin( "hs_api_key" );
     return weechat::WEECHAT_RC_OK;
@@ -369,10 +369,10 @@ sub GetDate {
 }
 
 #globals
-my %fp;
-my %fl;
-my %GD;
-my %GQ; #goalqueue
+our %fp;
+our %fl;
+our %GD;
+our %GQ; #goalqueue
 
 sub FindTeam{
     use constant teams => ( '0 is null',
@@ -457,7 +457,7 @@ sub NHLTeamID { #NHL.com team id assignment
     return 0;
 } #NHLTeamID
 
-my %httpcache;
+our %httpcache;
 sub download {
     no warnings;
     my( $url, $nocache ) = @_;
@@ -759,7 +759,7 @@ sub USHL {
     return "n";
 }
 
-my $playoffcount = 0;
+our $playoffcount = 0;
 sub PlayoffOdds{
     my $team = FindTeam( shift );
     my $teamabv;
@@ -798,6 +798,9 @@ sub PlayoffMatches {
     my $params = shift;
     my $search = FindTeam( $1, 1 ) if( $params =~ /(\w+)/ );
     my $season = $params =~ /(\d{4})/ ? "&season=$1" . ($1 + 1) : "";
+    my $dateint = int `date +"%m%d"`;
+    return PlayoffOdds( $search ) if( (length( $search ) > 0) && (($dateint < 409) || ($dateint > 1000)) );
+    
     my $data = download( "http://statsapi.web.nhl.com/api/v1/tournaments/playoffs?expand=round.series$season" );
     my( @ret, $js );
     eval { $js = decode_json( $data ) };
@@ -973,7 +976,7 @@ sub Salary{
 
 } #Salary
 
-my %goaliecache;
+our %goaliecache;
 sub GoalieStart{
 
     my( $search, $date ) = SplitDate( shift, '%m-%d-%Y'  );
