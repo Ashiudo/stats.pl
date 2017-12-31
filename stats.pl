@@ -159,6 +159,9 @@ sub event_privmsg {
             $h{goal_hq} = $hq;
             @ret = GoalQueue( \%h );
         }
+        if( $#ret > 0 ) {
+            $noticereply = 1;
+        }
     }
     elsif( /${t}queuetest (...) (\d+)/ ) {
         $h{goal_team} = $1;
@@ -1360,17 +1363,18 @@ sub GoalVidOld {
 sub GoalVid {
 
     my( $params, $hq ) = @_;
-    my( $index ) = $params =~ /(\d+)/;
+    my( $index ) = $params =~ /(\d+|all(?:$| ))/i;
     $params =~ s/(\s*)$index\s*/$1/;
     my( $team, $date ) = SplitDate( $params, '%Y-%m-%d' );
     my( $fullid, $js ) = FindGameID( $team, $date );
+    my $all = $index =~ /all/i;
     print "GoalVid -- team: $team index: $index date: $date\n" if( DEBUG );
     return 'usage: goal <team> <index> [date]' if( !$team || !$index );
     my( $ret );
     $fullid =~ /^(\d{4})/
         or return "error $team did not play on " . GetDate( ($date ? $date : '-12 hours'), '%b %d, %Y' );
 
-    return GoalVidOld( $fullid, $team, $index, $date ) if( $date && (GetDate( $date, "%Y%m%d" ) < 20160201) );
+    return GoalVidOld( $fullid, $team, $index, $date ) if( $date && (!$all) && (GetDate( $date, "%Y%m%d" ) < 20160201) );
 
     my $data = download( "http://statsapi.web.nhl.com/api/v1/game/$fullid/content" );
     my( $json, $nhlteamid );
@@ -1395,28 +1399,41 @@ sub GoalVid {
         return "Goal not found" if( $js->{status}{statusCode} >= 5 || ($index > $js->{teams}{$home ? 'home' : 'away'}{score} + 2) );
         return "!!display it $team $index";
     }
-    my $goal = $goals[$index - 1];
-    if( !$goal->{highlight}{playbacks} ) {
-        return "!!display it $team $index";
+    
+    my @ret;
+    for my $i ( 0 .. $#goals ) {
+        
+        next if( !$all && $i ne ($index-1) );
+        my $goal = $goals[$i];
+    
+        if( !$all && !$goal->{highlight}{playbacks} ) {
+            return "!!display it $team $index";
+        }
+
+        my @playbacks = @{$goal->{highlight}{playbacks}};
+
+        if( $hq ) {
+            @playbacks = grep { $_->{name} eq 'HTTP_CLOUD_WIRED_60' } @playbacks;
+        } else {
+            @playbacks = sort { $b->{height} <=> $a->{height} } grep { $_->{height} && ($_->{height} ne 'null') } @playbacks;
+        }
+
+        my $url = $playbacks[0]->{url};
+        $url = shorturl( $url ) if( !DEBUG );
+        if( !$url ) {
+            return "error goal not found" if( !$all );
+            next;
+        }
+
+        my $desc = "$goal->{highlight}{title} $goal->{highlight}{blurb} $goal->{highlight}{description}";
+        my $extra = $desc =~ /(PPG|SHG)/i ? " " . uc $1 : "";
+
+        push @ret, "$url | $goal->{description} [$goal->{periodTime}/$goal->{ordinalNum}$extra] $goal->{highlight}{description}";
+        
     }
 
-    my @playbacks = @{$goal->{highlight}{playbacks}};
-
-    if( $hq ) {
-        @playbacks = grep { $_->{name} eq 'HTTP_CLOUD_WIRED_60' } @playbacks;
-    } else {
-        @playbacks = sort { $b->{height} <=> $a->{height} } grep { $_->{height} && ($_->{height} ne 'null') } @playbacks;
-    }
-
-    my $url = $playbacks[0]->{url};
-    $url = shorturl( $url ) if( !DEBUG );
-    return "error goal not found" if( !$url );
-
-    my $desc = "$goal->{highlight}{title} $goal->{highlight}{blurb} $goal->{highlight}{description}";
-    my $extra = $desc =~ /(PPG|SHG)/i ? " " . uc $1 : "";
-
-    return "$url | $goal->{description} [$goal->{periodTime}/$goal->{ordinalNum}$extra] $goal->{highlight}{description}";
-
+    return @ret ? @ret : "error goal not found";
+    
 }
 
 sub GoalQueue {
