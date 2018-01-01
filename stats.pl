@@ -206,13 +206,16 @@ sub event_privmsg {
         @ret = OlympicsMedals( $1 ) unless $scorebot; }
     elsif( /${t}(next|last)(?:game)?(\d| |$)/ ) {
         my($t) = $text =~ / (.*)/ ? $1 : '';
+        my($season) = $t =~ /(20\d\d)$/ ? " $1" : "";
+        $t =~ s/20\d\d$// if( $season );
         my($num) = $text =~ /(\d+)/ ? $1 : 1;
         $t =~ s/\d+//g;
         if( !$t ) {
-            @ret = 'Usage: ' . lc substr($text,1,4) . ' <team> [<team2>] [<count>]';
+            @ret = 'Usage: ' . lc substr($text,1,4) . ' <team> [<team2>] [<count>] [<season>]';
         } else {
-            @ret = SchedNHL( "$t " . ($text =~ /last/i ? -$num : $num) );
+            @ret = SchedNHL( "$t " . ($text =~ /last/i ? -$num : $num) . $season );
         }
+        
     }
     elsif( /${t}hls/ ) {
         @ret = 'Get an HLS player for your browser like this one: https://chrome.google.com/webstore/detail/native-hls-playback/emnphkkblegpebimobpbekeedfgemhof?hl=en-US or https://addons.mozilla.org/en-US/firefox/addon/native_hls_playback/'; }
@@ -497,7 +500,7 @@ sub SchedNHL {
     #http://statsapi.web.nhl.com/api/v1/schedule?expand=schedule.teams,schedule.linescore,schedule.decisions&teamId=10&gameType=R&season=20162017
 
     my $params = shift;
-    return 'sched <team> [<team2>] [<index>]' if( !$params );
+    return 'sched <team> [<team2>] [<index>] [<season>]' if( !$params );
     print "SchedNHL: $params~\n" if( DEBUG );
 
     my $opp = $params =~ /[^ ]+ ([^\d -]+)/ ? $1 : '';
@@ -512,14 +515,14 @@ sub SchedNHL {
     $team = length( $team ) != 3 ? FindTeam( $team ) : uc( $team );
     return 'team not found' if( !$team );
 
-    my $index = $params =~ /(-?\d+) ?$/ ? $1 : 1;
+    my $index = $params =~ /(-?\d+) ?(?:20\d\d)?$/ ? $1 : 1;
     $index = 1 if( !$index );
     $index = 5 if( !DEBUG && $index > 5 );
     $index = -5 if ( !DEBUG && $index < -5 );
 
-    my $season = GetDate( '8 months ago', "%Y" );
-    my $today = GetDate( 'today', "%Y-%m-%d" );
-    my $url = "http://statsapi.web.nhl.com/api/v1/schedule?expand=schedule.teams,schedule.linescore";
+    my $season = $params =~ /(20\d\d)$/ ? $1 : GetDate( '8 months ago', "%Y" );
+    my $today = $params =~ /20\d\d$/ ? ($season+1) . "-07-01" : GetDate( 'today', "%Y-%m-%d" );
+    my $url = "http://statsapi.web.nhl.com/api/v1/schedule?expand=schedule.teams,schedule.linescore" . ($params =~ /20\d\d$/ ? "&gameType=R" : "");
     $url .= "&startDate=" . ($index < 1 ? "$season-10-01&endDate=$today" : "$today&endDate=" . ($season+1) . "-07-01");
 
     my $nhlid = NHLTeamID( $team );
