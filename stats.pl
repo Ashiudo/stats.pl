@@ -207,7 +207,7 @@ sub event_privmsg {
     elsif( /${t}(next|last)(?:game)?(\d| |$)/ ) {
         my($t) = $text =~ / (.*)/ ? $1 : '';
         my($season) = $t =~ /(20\d\d)$/ ? " $1" : "";
-        $t =~ s/20\d\d$// if( $season );
+        $text =~ s/20\d\d$// if( $season );
         my($num) = $text =~ /(\d+)/ ? $1 : 1;
         $t =~ s/\d+//g;
         if( !$t ) {
@@ -301,7 +301,6 @@ sub event_privmsg {
             #$h{shash}->print($target, $ret[$i], MSGLEVEL_CLIENTCRAP);
             $h{shash}->command( ($noticereply ? "notice" : "msg") . " $target $ret[$i]" );
         }
-
     }
 }
 
@@ -1586,6 +1585,27 @@ sub Summary {
             ( $other[3] ne 'EV' ? " $other[3]" : '' ) . "\x02" .
             ( $#who > 0 ? " ($who[1]" . ( $#who > 1 ? ", $who[2])" : ')' ) : '' );
     }
+    return @ret if( $progress !~ /final/i );
+
+    #look for highlights / recap videos
+    $data = download( "http://statsapi.web.nhl.com/api/v1/game/$fullid/content" );
+    my( $js, $videos );
+    eval { $js = decode_json( $data ); };
+    return @ret if( $@ );        
+    my @vids = reverse grep { $_->{title} =~ /(highlights|recap)$/i } @{ $js->{media}{epg} };
+    for my $i ( 0 .. $#vids ) {
+        foreach( @{ $vids[$i]->{items} } ) {
+            next if( $_->{type} !~ /video/i || ( $#vids > 1 && $vids[$i]->{title} =~ /extended/i ) );
+            my @playbacks = sort { $b->{height} <=> $a->{height} } grep { $_->{height} && ($_->{height} ne 'null') } @{ $_->{playbacks} };
+            if( @playbacks ) {
+                my $url = $playbacks[0]->{url};
+                $url = shorturl( $url ) if( !DEBUG );
+                $videos .= ( length( $videos ) ? " | " : "" ) . "$vids[$i]->{title}: $url";
+                last;
+            }
+        }
+    }
+    push @ret, $videos if( $videos );
     return @ret;
 
 } #summary
