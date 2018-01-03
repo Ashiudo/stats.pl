@@ -479,7 +479,7 @@ sub download {
     for my $c ( 1 .. 5 ) {
         if( $httpcache{$c}{url} eq $url ) {
             $httpcache{hits}++;
-            $httpcache{$c}{timer} = time + 30;
+            #$httpcache{$c}{timer} = time + 30; spam prevents a cache clear
             return $httpcache{$c}{data};
         }
     }
@@ -1372,11 +1372,10 @@ sub GoalVid {
     my $all = $index =~ /all/i;
     print "GoalVid -- team: $team index: $index date: $date\n" if( DEBUG );
     return 'usage: goal <team> <index> [date]' if( !$team || !$index );
-    my( $ret );
     $fullid =~ /^(\d{4})/
         or return "error $team did not play on " . GetDate( ($date ? $date : '-12 hours'), '%b %d, %Y' );
 
-    return GoalVidOld( $fullid, $team, $index, $date ) if( $date && (!$all) && (GetDate( $date, "%Y%m%d" ) < 20160201) );
+    return GoalVidOld( $fullid, $team, $index, $date ) if( $date && !$all && (GetDate( $date, "%Y%m%d" ) < 20160201) );
 
     my $data = download( "http://statsapi.web.nhl.com/api/v1/game/$fullid/content" );
     my( $json, $nhlteamid );
@@ -1396,7 +1395,7 @@ sub GoalVid {
     }
     
     @goals = sort{ $a->{timeOffset} <=> $b->{timeOffset} } @goals;
-    if( $index > @goals ) {
+    if( !$all && $index > @goals ) {
         my $home = FindTeam( $js->{teams}{home}{team}{name} ) eq $team;
         return "Goal not found" if( $js->{status}{statusCode} >= 5 || ($index > $js->{teams}{$home ? 'home' : 'away'}{score} + 2) );
         return "!!display it $team $index";
@@ -1466,11 +1465,11 @@ sub GoalQueue {
 sub GoalCheck {
 
     for( my $i=0; $i <= $#{ $GQ{check} }; $i++ ) {
-        my $vid = GoalVid( "$GQ{check}[$i]{goal_team} $GQ{check}[$i]{goal_index}", $GQ{check}[$i]{goal_hq} );
-        if( $vid =~ /^!!|error/ ) {
+        my @vid = GoalVid( "$GQ{check}[$i]{goal_team} $GQ{check}[$i]{goal_index}", $GQ{check}[$i]{goal_hq} );
+        if( $vid[0] =~ /^!!|error/ ) {
             next if( time < $GQ{check}[$i]{TTL} );
         } else {
-            my $msg = "$GQ{check}[$i]{nick}: $vid";
+            my $msg = "$GQ{check}[$i]{nick}: $vid[0]";
             if( exists &weechat::command ) {
                 weechat::command( $GQ{check}[$i]{buffer}, $msg );
             } else {
@@ -1521,7 +1520,9 @@ sub xrxs {
 sub shorturl {
     my $url = shift;
     $_ = wget( 'https://www.googleapis.com/urlshortener/v1/url?key=AIzaSyBzq7JCfoRml_m7hKndjh7_Y6K1o1ANDO0', "--header 'Content-Type: application/json' --post-data='{\"longUrl\": \"$url\"}'" );
-    return /"id":\s*"http.*?(goo.*?)"/ ? "http://$1" : $url;
+    return "http://$1" if( /"id":\s*"http.*?(goo.*?)"/ );
+    #print "goo.gl error:\n$_\n";
+    return $url;
 }
 
 sub Summary {
@@ -2626,7 +2627,7 @@ sub GoalRND {
     eval { $json = decode_json( $json ) };
     return 'an error occured' if( $@ );
 
-    my( $ret, $rnd );
+    my( @ret, $rnd );
     my( $max ) = 0;
     my @games = sort { $a->{'est'} cmp $b->{'est'} } @$json;
     foreach( @games ) {
@@ -2643,13 +2644,13 @@ sub GoalRND {
         my $goals = $scores[0] =~ /(\d+).*?(\d+)/ ? $1 + $2 : 1;
         my $goal = int( rand( $goals ) ) + 1;
         print "selecting goal $goal of $goals\n" if( DEBUG );
-        $ret = GoalVid( $games[$rnd]->{$goal > $1 ? 'h' : 'a'} . " " . ($goal > $1 ? $goals-$1 : $goal) . " $date", $hq );
-        if( $ret =~ /http/ ) {
-            $ret .= GetDate( $date, " -- %a %b %d, %Y" );
+        @ret = GoalVid( $games[$rnd]->{$goal > $1 ? 'h' : 'a'} . " " . ($goal > $1 ? $goals-$1 : $goal) . " $date", $hq );
+        if( $ret[0] =~ /http/ ) {
+            $ret[0] .= GetDate( $date, " -- %a %b %d, %Y" );
             last;
         }
     }
-    return length( $ret ) > 25 ? $ret : 'an error occured';
+    return length( $ret[0] ) > 25 ? $ret[0] : 'an error occured';
 }
 
 sub OlympicsOdds {
