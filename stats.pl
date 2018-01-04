@@ -327,7 +327,7 @@ sub irssi_get_conf_cb {
     #Irssi::print("stats_conf reloaded from $file $hs_api_key");
 }
 
-use constant UA => "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.96 Safari/537.36";
+use constant UA => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.84 Safari/537.36";
 sub zget{
     require LWP::UserAgent;
     require HTTP::Message;
@@ -545,7 +545,7 @@ sub SchedNHL {
             BoldScore( $game );
             $game .= " ( " . uc $_->{games}->[0]->{linescore}{currentPeriodTimeRemaining};
             $game .= ($_->{games}->[0]->{linescore}{currentPeriod} > 3 ? " $_->{games}->[0]->{linescore}{currentPeriodOrdinal} )" : " )");
-            push @ret, $game . GetDate( $_->{date}, ' %b %d %Y' );
+            push @ret, $game . GetDate( $_->{date}, ' %b %-d %Y' );
             last if @ret == abs( $index );
         }
     } else {
@@ -557,9 +557,9 @@ sub SchedNHL {
                 $game = "vs " . $_->{games}->[0]->{teams}{away}{team}{abbreviation}
             }
             if( $_->{games}->[0]->{status}{statusCode} eq '8' ) {
-                push @ret, $game . GetDate( $_->{games}->[0]->{gameDate}, ' %a %d %b %Y (TBD)' );
+                push @ret, $game . GetDate( $_->{games}->[0]->{gameDate}, ' %a %b %-d %Y (TBD)' );
             } else {
-                push @ret, $game . GetDate( $_->{games}->[0]->{gameDate}, ' %c' );
+                push @ret, $game . GetDate( $_->{games}->[0]->{gameDate}, ' %a %b %-d %Y %-I:%M%P %Z' );
             }
             last if @ret == $index;
         }
@@ -1521,7 +1521,7 @@ sub shorturl {
     my $url = shift;
     $_ = wget( 'https://www.googleapis.com/urlshortener/v1/url?key=AIzaSyBzq7JCfoRml_m7hKndjh7_Y6K1o1ANDO0', "--header 'Content-Type: application/json' --post-data='{\"longUrl\": \"$url\"}'" );
     return "http://$1" if( /"id":\s*"http.*?(goo.*?)"/ );
-    #print "goo.gl error:\n$_\n";
+    print "goo.gl error:\n$_\n" if( DEBUG );
     return $url;
 }
 
@@ -2553,7 +2553,9 @@ sub ScoresNHL {
             $tmp .= GetDate( $_->{gameDate}, "@ $teamsabv[1] ( %-I:%M %p %Z )" );
         } else {
             $tmp .= $_->{linescore}{teams}{away}{goals} . " " . $teamsabv[1] . " " . $_->{linescore}{teams}{home}{goals} . " ( ";
-            if( $_->{status}{statusCode} >= 6 ) { #game is final
+            if( $_->{status}{statusCode} >= 9 ) { #postponed?
+                $tmp = "$teamsabv[0] @ $teamsabv[1] ( $_->{status}{detailedState} )";
+            } elsif( $_->{status}{statusCode} >= 6 ) { #game is final
                 $tmp .= "Final" . ( $_->{linescore}{currentPeriod} == 3 ? "" : "/" . $_->{linescore}{currentPeriodOrdinal} ) . " )";
             } else {
                 $tmp .= $_->{linescore}{currentPeriodTimeRemaining} ." ". $_->{linescore}{currentPeriodOrdinal} . " )";
