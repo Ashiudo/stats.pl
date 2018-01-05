@@ -675,7 +675,7 @@ sub OHL {
     my $GameStatus;
 
     ( $data ) = ( $data =~ /var todayData = '(.*?)'\;/s );
-    my ( @games ) = ( $data =~ /Game.*?"\:\{(.*?)\}\}/gs ); #'
+    my ( @games ) = ( $data =~ /Game.*?"\:\{(.*?)\}\}/gs ); #"
     return 'No games found.' if( !@games );
     foreach (@games) {
         my ($ID, $Number, $Letter, $Label, $Date, $Time, $Zone, $Status, $ShortStatus, $SmallStatus, $StatusID, $Clock, $Period, $Away, $AwayCode, $AwayUrl, $AwayScore, $Home, $HomeCode, $HomeUrl, $HomeScore) = ( /"ID"\:"(.*?)".*?Number"\:"(.*?)".*?Letter"\:"(.*?)".*?Label"\:"(.*?)".*?Date"\:"(.*?)".*?ScheduledTime"\:"(.*?)".*?Timezone"\:"(.*?)".*?Status"\:"(.*?)".*?ShortStatus"\:"(.*?)".*?SmallStatus"\:"(.*?)".*?StatusID"\:"(.*?)".*?GameClock"\:"(.*?)".*?"Period"\:"(.*?)".*?Name"\:"(.*?)".*?Code"\:"(.*?)".*?AudioUrl"\:"(.*?)".*?Score"\:"(.*?)".*?Name"\:"(.*?)".*?Code"\:"(.*?)".*?AudioUrl"\:"(.*?)".*?Score"\:"(.*?)"/s );
