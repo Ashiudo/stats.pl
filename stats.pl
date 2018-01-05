@@ -466,7 +466,7 @@ our %httpcache;
 sub download {
     no warnings;
     my( $url, $nocache ) = @_;
-    $url =~ s/\'/\'"\'"\'/g;
+    $url =~ s/'/'"'"'/g; #'
     return lget( $url ) if( $nocache );
     my $t = time;
     for my $c ( 1 .. 5 ) {
