@@ -368,7 +368,7 @@ sub links {
 
 sub GetDate {
     my( $date, $fmt ) = @_;
-    $date =~ s/'//g;
+    $date =~ s/\'//g;
     my( $ret ) = `date --date='$date' "+$fmt" 2>&1` =~ /(.*)/;
     return $ret;
 }
