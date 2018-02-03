@@ -406,7 +406,7 @@ sub FindTeam{
         return (abv)[25] if( /^SJ$/ );
         return (abv)[26] if( /^(?:TB($|[^L])|BOLTS)/ );
         return (abv)[29] if( /^(?:WAS|CAPS)/ );
-        return (abv)[30] if( /^WIN/ );
+        return (abv)[30] if( /^WIN[^G]/ );
         return (abv)[31] if( /VEGAS|^LAS|GOL|LV/ );
     }
     for my $i ( 1 .. (teams - 1) ) {
