@@ -235,10 +235,8 @@ sub event_privmsg {
     elsif( $target =~ /^#nhl$/i && $text =~ /${t}n[hf]l/i && $scorebot == 0 && $goalbot == 1 ) {
         return;
     }
-    elsif( /${t}ohl ?(.*)/ ) {
-        @ret = OHL( $1 ); }
-    elsif( /${t}(?:chl|mem) ?(.*)/ ) {
-        @ret = CHL( $1 ); }
+    elsif( /${t}(chl|ohl|whl|ahl|echl|ushl|nahl|bchl|sjhl|nojhl) ?(.*)/ ) {
+        @ret = MinorLeagues( $1, $2 ); }
     elsif( /${t}(?:nhl|nfl|nba|mlb|mls|wj|whc|iihf)/i ) {
         @ret = Scores( substr( $text, 1 ) ) if( !$scorebot );
         foreach( @ret ) { BoldScore( $_ ); }
@@ -616,61 +614,15 @@ sub SchedNHLold {
     }
     return @ret ? @ret : 'no games found';
 } #SchedNHL
-
-sub CHL {
-    my @ret;
-    my( $search, $date ) = SplitDate( shift, '%Y-%m-%d' );
+   
+sub MinorLeagues {
+    my( @ret, $date );
+    my($league, $search) = @_;
+    ($search,$date) = SplitDate( $search, '%Y-%m-%d' );
+    
     $date = GetDate( 'now', '%Y-%m-%d' ) if( !$date );
+    my $url = "http://cluster.leaguestat.com/lsconsole/json.php?client_code=$league&forcedate=$date";
 
-    my $url = "http://cluster.leaguestat.com/lsconsole/json.php?client_code=chl&forcedate=$date";
-    my $data = download( $url );
-    my $GameStatus;
-
-    ( $data ) = ( $data =~ /var todayData = '(.*?)'\;/s );
-    my ( @games ) = ( $data =~ /Game.*?"\:\{(.*?)\}\}/gs ); #"
-    return 'No games found.' if( !@games );
-    foreach (@games) {
-        my ($ID, $Number, $Letter, $Label, $Date, $Time, $Zone, $Status, $ShortStatus, $SmallStatus, $StatusID, $Clock, $Period, $Away, $AwayCode, $AwayUrl, $AwayScore, $Home, $HomeCode, $HomeUrl, $HomeScore) = ( /"ID"\:"(.*?)".*?Number"\:"(.*?)".*?Letter"\:"(.*?)".*?Label"\:"(.*?)".*?Date"\:"(.*?)".*?ScheduledTime"\:"(.*?)".*?Timezone"\:"(.*?)".*?Status"\:"(.*?)".*?ShortStatus"\:"(.*?)".*?SmallStatus"\:"(.*?)".*?StatusID"\:"(.*?)".*?GameClock"\:"(.*?)".*?"Period"\:"(.*?)".*?Name"\:"(.*?)".*?Code"\:"(.*?)".*?AudioUrl"\:"(.*?)".*?Score"\:"(.*?)".*?Name"\:"(.*?)".*?Code"\:"(.*?)".*?AudioUrl"\:"(.*?)".*?Score"\:"(.*?)"/s ); #"
-        $HomeUrl =~ s/\\//g;
-        $AwayUrl =~ s/\\//g;
-        $HomeUrl =~ s/\&amp\;/\&/g;
-        $AwayUrl =~ s/\&amp\;/\&/g;
-        if (length($HomeCode) ==4) { $HomeCode = substr($HomeCode, 0, -1); }
-        if (length($AwayCode) ==4) { $AwayCode = substr($AwayCode, 0, -1); }
-        $AwayCode =~ s/^(?=..$)/ /;
-        $HomeCode =~ s/(?<=^..)$/ /;
-        if( $search =~ /[^\*]+/ ) {
-            next if( "$Away $Home $AwayCode $HomeCode" !~ /\Q$search\E/i );
-        }
-
-        if ($Clock == "0:00") { $Clock = "END" }
-        if ($Clock == "20:00") { $Clock = "START" }
-
-        if ($StatusID == 1) {
-            $GameStatus = "$Time $Zone";
-            my $format = "%-3s @ %-3s %-10s";
-            push @ret,  sprintf($format, ($AwayCode, $HomeCode, "( $GameStatus )"));
-        } elsif ($StatusID == 2) {
-            $GameStatus = "$Clock $Period"; $AwayCode = "$AwayCode $AwayScore"; $HomeCode = "$HomeCode $HomeScore";
-            my $format = "%-4s %-4s %-10s";
-            push @ret,  sprintf($format, ($AwayCode, $HomeCode, "( $GameStatus )"));
-            BoldScore( $ret[$#ret] )
-        } else {
-            $GameStatus = "$SmallStatus"; $AwayCode = "$AwayCode $AwayScore"; $HomeCode = "$HomeCode $HomeScore";
-            my $format = "%-4s %-4s %-10s";
-            push @ret,  sprintf($format, ($AwayCode, $HomeCode, "( $GameStatus )"));
-            BoldScore( $ret[$#ret] )
-        }
-    }
-    return @ret ? @ret : 'no games found';
-}
-
-sub OHL {
-    my @ret;
-    my( $search, $date ) = SplitDate( shift, '%Y-%m-%d' );
-    $date = GetDate( 'now', '%Y-%m-%d' ) if( !$date );
-
-    my $url = "http://cluster.leaguestat.com/lsconsole/json.php?client_code=ohl&forcedate=$date";
     my $data = download( $url );
     my $GameStatus;
 
