@@ -1348,8 +1348,7 @@ sub GoalVid {
     
     @goals = sort{ $a->{timeOffset} <=> $b->{timeOffset} } @goals;
     if( !$all && $index > @goals ) {
-        my $home = FindTeam( $js->{teams}{home}{team}{name} ) eq $team;
-        return "Goal not found" if( $js->{status}{statusCode} >= 5 || ($index > $js->{teams}{$home ? 'home' : 'away'}{score} + 2) );
+        return "Goal not found" if( $js->{status}{statusCode} >= 5 );
         return "!!display it $team $index";
     }
     
