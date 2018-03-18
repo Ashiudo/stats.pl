@@ -402,7 +402,7 @@ sub FindTeam{
         return (abv)[20] if( /^SENS$/ );
         return (abv)[22] if( /PH[OX]$/ );
         return (abv)[23] if( /PGH|PENS/ );
-        return (abv)[24] if( /LOUIS/ && $_ !~ /MART/ );
+        return (abv)[24] if( /LOUIS|BLUES/ && $_ !~ /MART/ );
         return (abv)[25] if( /^SJ$/ );
         return (abv)[26] if( /^(?:TB($|[^L])|BOLTS)/ );
         return (abv)[29] if( /^(?:WAS|CAPS)/ );
@@ -963,7 +963,7 @@ sub GoalieStart{
     foreach( @games ) {
         my @team = /"top-heading-heavy">(.*?) at (.*?)</s;
         my $home = $2 eq $search ? 1 : 0;
-        next if( "$1 $2" !~ /\Q$search\E/i );
+        next if( FindTeam( $1 ) ne FindTeam( $search ) && FindTeam( $2 ) ne FindTeam( $search ) && "$1 $2" !~ /\Q$search\E/i );
         my @name = /class="goalie-info.*?<h4>(.*?)</sg;
         my @status = /h5 class="news-strength.*?(\w+)\s*<\/h5>/sg;
         my( $time ) = /game-time">\s*(\d+.*?)\s\s/s;
@@ -1186,7 +1186,7 @@ sub FindGameID {
     if( $date ) {
         $date = GetDate( $date, '%Y-%m-%d' );
         #http://statsapi.web.nhl.com/api/v1/schedule?startDate=2017-09-21&endDate=2017-09-21
-        my $data = download( "http://statsapi.web.nhl.com/api/v1/schedule?startDate=$date&endDate=$date&expand=schedule.linescore" );
+        my $data = download( "http://statsapi.web.nhl.com/api/v1/schedule?startDate=$date&endDate=$date" );
         my $js;
         eval '$js = decode_json( $data )';
         return $ret if( $@ );
@@ -2487,6 +2487,7 @@ sub ScoresNHL {
     
     #http://statsapi.web.nhl.com/api/v1/schedule?startDate=2017-09-21&endDate=2017-09-21&expand=schedule.linescore,schedule.broadcasts.all
     my( $search, $date ) = SplitDate( shift, '%Y-%m-%d' );
+    my $exsearch = FindTeam( $search );
     my( @ret, $js );
     
     undef $search if( $search eq '*' );
@@ -2498,7 +2499,8 @@ sub ScoresNHL {
     foreach( @{ $js->{dates}->[0]->{games} } ) {
         my @teams = ( $_->{teams}->{away}->{team}->{name}, $_->{teams}->{home}->{team}->{name} );
         my @teamsabv = ( FindTeam( $teams[0], 1 ), FindTeam( $teams[1], 1 ) );
-        next if( $search && "@teams @teamsabv" !~ /\Q$search\E/i );
+        my $teamex = "@teams @teamsabv";
+        next if( $search && $teamex !~ /$search|$exsearch/i );
         my $tmp = $teamsabv[0] . " ";
         if ( $_->{status}{statusCode} < 3 ) { #not started
             $tmp .= GetDate( $_->{gameDate}, "@ $teamsabv[1] ( %-I:%M %p %Z )" );
