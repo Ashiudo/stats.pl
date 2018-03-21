@@ -220,7 +220,7 @@ sub event_privmsg {
     elsif( /${t}hls/ ) {
         @ret = 'Get an HLS player for your browser like this one: https://chrome.google.com/webstore/detail/native-hls-playback/emnphkkblegpebimobpbekeedfgemhof?hl=en-US or https://addons.mozilla.org/en-US/firefox/addon/native_hls_playback/'; }
     elsif( /${t}help$/ ) {
-        @ret = 'http://192.95.27.97/haaalp.txt';
+        @ret = 'https://nhl.bot.nu/haaalp.txt';
     }
     elsif( /${t}ragewings$/ ) {
         return; # if( (lc($target) !~ /#(nhl|hockey|pens)/) || ($fp{"rw$server"} > time) || ($scorebot == 1) );
@@ -962,7 +962,7 @@ sub GoalieStart{
 
     foreach( @games ) {
         my @team = /"top-heading-heavy">(.*?) at (.*?)</s;
-        my $home = $2 eq $search ? 1 : 0;
+        my $home = FindTeam( $2, 1 ) eq FindTeam( $search, 1 ) ? 1 : 0;
         next if( FindTeam( $1 ) ne FindTeam( $search ) && FindTeam( $2 ) ne FindTeam( $search ) && "$1 $2" !~ /\Q$search\E/i );
         my @name = /class="goalie-info.*?<h4>(.*?)</sg;
         my @status = /h5 class="news-strength.*?(\w+)\s*<\/h5>/sg;
