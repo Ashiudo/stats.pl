@@ -614,12 +614,12 @@ sub SchedNHLold {
     }
     return @ret ? @ret : 'no games found';
 } #SchedNHL
-   
+
 sub MinorLeagues {
     my( @ret, $date );
     my($league, $search) = @_;
     ($search,$date) = SplitDate( $search, '%Y-%m-%d' );
-    
+
     $date = GetDate( 'now', '%Y-%m-%d' ) if( !$date );
     my $url = "http://cluster.leaguestat.com/lsconsole/json.php?client_code=$league&forcedate=$date";
 
@@ -757,7 +757,7 @@ sub PlayoffMatches {
     my $season = $params =~ /(\d{4})/ ? "&season=$1" . ($1 + 1) : "";
     my $dateint = int `date +"%m%d"`;
     return PlayoffOdds( $search ) if( (length( $search ) > 0) && (($dateint < 409) || ($dateint > 1000)) );
-    
+
     my $data = download( "http://statsapi.web.nhl.com/api/v1/tournaments/playoffs?expand=round.series$season" );
     my( @ret, $js );
     eval { $js = decode_json( $data ) };
@@ -962,15 +962,21 @@ sub GoalieStart{
 
     foreach( @games ) {
         my @team = /"top-heading-heavy">(.*?) at (.*?)</s;
-        my $home = FindTeam( $2, 1 ) eq FindTeam( $search, 1 ) ? 1 : 0;
         next if( FindTeam( $1 ) ne FindTeam( $search ) && FindTeam( $2 ) ne FindTeam( $search ) && "$1 $2" !~ /\Q$search\E/i );
+        my $home = FindTeam( $team[1], 1 ) eq FindTeam( $search, 1 ) ? 1 : 0;
         my @name = /class="goalie-info.*?<h4>(.*?)</sg;
         my @status = /h5 class="news-strength.*?(\w+)\s*<\/h5>/sg;
         my( $time ) = /game-time">\s*(\d+.*?)\s\s/s;
+        if( !$date || $date eq GetDate( '-12 hours', '%m-%d-%Y' ) ) {
+            my $gstats = StatsGame( $name[$home] );
+            if( $gstats !~ /player not found|error|SH 0 / ) {
+                return $gstats;
+            }
+        }
         push @ret, "$name[$home] is $status[$home] (" . FindTeam($team[0],1) . " @ " . FindTeam($team[1],1) . ", $time)";
     }
 
-    %goaliecache = () if( ! @ret ); #lets clear the cache, this site has problems...        
+    %goaliecache = () if( ! @ret ); #lets clear the cache, this site has problems...
     return @ret ? @ret : 'No game found';
 
 } #GoalieStart
@@ -1087,7 +1093,7 @@ sub LeadersNHL {
         last if( $cat =~ /^$_/ );
         $i++;
     }
-    
+
     if( $i == @cats ) {
         return "Valid categories: \x035P\x03oints \x035G\x03oals \x035A\x03ssists " .
             "\x035+\x03/- \x035GAA\x03 \x035SV\x03% \x035W\x03ins \x035Sh\x03utouts";
@@ -1097,26 +1103,26 @@ sub LeadersNHL {
     my $js;
     eval '$js = decode_json( $data )';
     return 'nhl.com error' if( $@ );
-    
+
     foreach( @{ $i < 4 ? $js->{skater} : $js->{goalie} } ) {
         if( $_->{measure} eq $catnames[$i] ) {
             $js = $_;
             last;
         }
     }
-    
+
     print "usin cat $js->{measure}\n" if( DEBUG );
-    
+
     my @ret = "Top 5 " . uc $catnames[$i];
     my @sorted = sort { $a->{listIndex} gt $b->{listIndex } } @{ $js->{leaders} };
-    
+
     my( $maxlen, @players ) = 0;
     for my $c ( 0 .. 4 ) {
         $players[$c] = $sorted[$c]->{'fullName'};
         $players[$c] =~ s/(.).*? /$1\. /;
         $maxlen = length( $players[$c] ) if( length( $players[$c] ) > $maxlen );
     }
-    
+
     for my $j ( 0 .. 4 ) {
         push @ret, sprintf "%d. %-${maxlen}s [%s] \x02%s\x02",
             $j + 1, $players[$j], $sorted[$j]->{'tricode'}, $sorted[$j]->{'valueLabel'};
@@ -1125,7 +1131,7 @@ sub LeadersNHL {
     return ($#ret == 5 ? @ret : "error occured");
 
 }
-    
+
 
 sub LeadersNHLold {
     my $cat = lc( shift );
@@ -1190,14 +1196,14 @@ sub FindGameID {
         my $js;
         eval '$js = decode_json( $data )';
         return $ret if( $@ );
-        
+
         foreach( @{ $js->{dates}->[0]->{games} } ) {
             if( "$_->{teams}{away}{team}{name} $_->{teams}{home}{team}{name}" =~ FindTeam( $$team ) ) {
                 $js = $_;
                 return( $js->{gamePk}, $js );
             }
         }
-        
+
     } else {
         if( !$GD{scoreboardtime} || (time > $GD{scoreboardtime}) ) {
             return if( GstatsUpdate() == 0 );
@@ -1336,7 +1342,7 @@ sub GoalVid {
     $nhlteamid = NHLTeamID( $team );
 
     my @goals = grep{ $_->{type} =~ /GOAL/i && $_->{teamId} == $nhlteamid } @{$json->{media}{milestones}{items}};
-    
+
     for( my $i = $#goals; $i >= 0; $i-- ) {
         for my $j ( 0 .. $#goals ) {
             if( $j ne $i && $goals[$i]->{statsEventId} eq $goals[$j]->{statsEventId} ) {
@@ -1345,19 +1351,19 @@ sub GoalVid {
             }
         }
     }
-    
+
     @goals = sort{ $a->{timeOffset} <=> $b->{timeOffset} } @goals;
     if( !$all && $index > @goals ) {
         return "Goal not found" if( $js->{status}{statusCode} >= 5 );
         return "!!display it $team $index";
     }
-    
+
     my @ret;
     for my $i ( 0 .. $#goals ) {
-        
+
         next if( !$all && $i ne ($index-1) );
         my $goal = $goals[$i];
-    
+
         if( !$all && !$goal->{highlight}{playbacks} ) {
             return "!!display it $team $index";
         }
@@ -1381,11 +1387,11 @@ sub GoalVid {
         my $extra = $desc =~ /(PPG|SHG)/i ? " " . uc $1 : "";
 
         push @ret, "$url | $goal->{description} [$goal->{periodTime}/$goal->{ordinalNum}$extra] $goal->{highlight}{description}";
-        
+
     }
 
     return @ret ? @ret : "error goal not found";
-    
+
 }
 
 sub GoalQueue {
@@ -1543,7 +1549,7 @@ sub Summary {
     $data = download( "http://statsapi.web.nhl.com/api/v1/game/$fullid/content" );
     my( $js, $videos );
     eval { $js = decode_json( $data ); };
-    return @ret if( $@ );        
+    return @ret if( $@ );
     my @vids = reverse grep { $_->{title} =~ /(highlights|recap)$/i } @{ $js->{media}{epg} };
     for my $i ( 0 .. $#vids ) {
         foreach( @{ $vids[$i]->{items} } ) {
@@ -2361,17 +2367,17 @@ sub StatsNHL {
 sub ScoresIIHF {
     #{"n":"62","d":"2017-05-20","t":"19:15 GMT+2","v":"1","p":"SF","e":"2","h":"SWE","g":"FIN",},
     #{"n":"55","d":"2017-05-16","t":"20:15 GMT+2","v":"1","p":"PRE","group":"A","e":"7","h":"GER","g":"LAT","r":"4-3","s":"GWS",},
-    
+
     my( $search, $date ) = SplitDate( shift, '%Y-%m-%d' );
     $date = GetDate( '6 hours ago', '%Y-%m-%d' ) if( !$date );
     my( $year ) = $date =~ /(....)/;
     print "ScoresIIHF: $search | $date\n" if( DEBUG );
-    
+
     my( $data ) = download( "http://d.widgets.iihf.hockey/Hydra/${year}-WM/widget_en_${year}_wm_tournament.js" );
     $data =~ s/.*?games: \[(.*?)\].*/$1/s;
     my @ret;
     foreach( grep { /"d":"$date/ } $data =~ /(\{.*?\})/sg ) {
-        my %g = simplejson( $_ );        
+        my %g = simplejson( $_ );
         if( $g{e} == 7 ) {
             my( $score_home, $score_away ) = $g{r} =~ /(\d+)-(\d+)/;
             push @ret, "$g{g} $score_away $g{h} $score_home ( Final" . ($g{s} == 3 ? "" : "/$g{s}") . " )";
@@ -2387,12 +2393,12 @@ sub ScoresIIHF {
 }
 
 sub ScoresIIHFhtml {
-    
+
     my( $search, $date ) = SplitDate( shift, '%Y-%m-%d' );
     $date = "(?:" . GetDate( '6 hours ago', '%Y-%m-%d' ) . "|wm_live)" if( !$date );
     my( $year ) = $date =~ /(\d{4})/;
     print "ScoresIIHFhtml: $search | $date\n" if( DEBUG );
-    
+
     #<div id=\"date-2017-05-05\" class=\"game-day\"><div title=\"Click here to open Game Summary\" data-url=\"/en/games/2017-05-05/SWE-vs-RUS/\" class=\"played page-linker\">
     #<div class=\"title\">Game Completed</div><div class=\"game\"><img src=\"http://s.widgets.iihf.hockey/Hydra/flags/30x22/SWE.png\" class=\"flag left\" alt=\"Sweden\" title=\"Sweden\"><span class=\"team left\">SWE</span>
     #<span class=\"result active\">1 - 2</span>
@@ -2413,10 +2419,10 @@ sub ScoresIIHFhtml {
         }
     }
     return @ret ? @ret : "no games found";
-        
+
     #live live-game-linker\"><div class=\"title\"><span class=\"live-flag\"><span>LIVE</span>Period 1 Ended</span>
 }
-    
+
 sub ScoresTSN {
     print "ScoresTSN()\n" if( DEBUG );
     my( $league, $search, $date ) = @_;
@@ -2484,18 +2490,18 @@ sub ScoresTSN {
 } #ScoresTSN( )
 
 sub ScoresNHL {
-    
+
     #http://statsapi.web.nhl.com/api/v1/schedule?startDate=2017-09-21&endDate=2017-09-21&expand=schedule.linescore,schedule.broadcasts.all
     my( $search, $date ) = SplitDate( shift, '%Y-%m-%d' );
     my $exsearch = FindTeam( $search );
     my( @ret, $js );
-    
+
     undef $search if( $search eq '*' );
-    $date = GetDate( '-12 hours', '%Y-%m-%d' ) if( !$date );    
+    $date = GetDate( '-12 hours', '%Y-%m-%d' ) if( !$date );
     my( $data ) = download( "http://statsapi.web.nhl.com/api/v1/schedule?startDate=$date&endDate=$date&expand=schedule.linescore,schedule.broadcasts.all", 1 );
     eval { $js = decode_json( $data ) };
-    return "nhl.com error occured" if( $@  );    
-    
+    return "nhl.com error occured" if( $@  );
+
     foreach( @{ $js->{dates}->[0]->{games} } ) {
         my @teams = ( $_->{teams}->{away}->{team}->{name}, $_->{teams}->{home}->{team}->{name} );
         my @teamsabv = ( FindTeam( $teams[0], 1 ), FindTeam( $teams[1], 1 ) );
@@ -2518,13 +2524,13 @@ sub ScoresNHL {
             $tmp .= $_->{name} . "," foreach( @{ $_->{broadcasts} } );
             $tmp =~ s/\)(.*?),$/\) \[$1\]/;
         }
-                 
-        push @ret, $tmp;        
-        
+
+        push @ret, $tmp;
+
     }
-    
+
     return ( @ret ? @ret : ( $search ? 'no matching results' : "no games on $date" ) );
-    
+
 } #ScoresNHL()
 
 sub ScoresNHLold {
@@ -2563,7 +2569,7 @@ sub Scores {
 
     my( $league, $params ) = split( ' ', lc shift, 2 );
     my( $football, $url );
-    
+
     if( $league eq 'nhl' ) {
         return ScoresNHL( $params );
     } else {
