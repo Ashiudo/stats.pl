@@ -672,33 +672,23 @@ sub RotoNews {
     my %g = google( 'http://www.rotowire.com/hockey/', $search );
     for my $c ( 1 .. $g{count} ) {
         #http://www.rotowire.com/hockey/player.htm?id=1675
-        if( $g{title}[$c] =~ /\Q$search\E/i && $g{url}[$c] =~ m!(https?://www.rotowire.com/hockey/player\.htm\?[Ii][Dd]=\d+)! ) {
+        if( $g{title}[$c] =~ /\Q$search\E/i && $g{url}[$c] =~ m!(https?://www.rotowire.com/hockey/player\.php\?[Ii][Dd]=\d+)! ) {
             $data = download( $1, 1 );
             last;
         }
     }
-    if( !$data ) {
-        $search = "$2,$1" if( $search =~ /(\w+) (.*)/ );
-        $_ = download( "http://www.rotowire.com/search.htm?lastname=$search", 1 );
-        if( m!<link rel="canonical" href="http://www.rotowire.com/hockey/player\.htm!s ) {
-            $data = $_;
-        } elsif( /NHL<\/div>.*?<a href="(.*?)"/s ) {
-            $data = download( "http://www.rotowire.com$1", 1 );
-        }
-    }
+
     return "player not found" if( !$data );
-    my( $player ) = $data =~ /<h1>(.*?)</s;
-    my( $latest ) = $data =~ /"splayer-namedate">(.*?) .*?<p class="splayer-note".*?>(.*?)<\/p/s ? "\002$1\002: $2" : '';
-    $latest =~ s/&nbsp;/ /g;
-    my @ret = $latest;
+    my( $player ) = $data =~ /p-card__player-name">(.*?)</s;
+    my @ret;
 
     #map /(fg\d)/g, $str =~ /flag1(.*?)flag2/;
-    while( $data =~ /news-item-date">(.*?)<.*?news-item-news.*?>(.*?)<\/div/sg && $#ret < 2 ) {
+    while( $data =~ /news-update__timestamp">(.*?)<.*?news-update__news">(.*?)<\/div/sg && $#ret < 2 ) {
         push @ret, "\002$1\002: $2";
     }
     foreach( @ret ) { s/<.*?>//sg; }
-    $ret[$#ret] = "News for $player - $ret[$#ret]";
-    return reverse @ret;
+    $ret[0] = "News for $player - $ret[0]";
+    return @ret;
 } #rotonews
 
 sub USHL {
@@ -908,9 +898,8 @@ sub Salary{
     } #else direct link
 
     #find expiry
-    my( $expdata ) = $data =~ /CURRENT.*?<\/h4>(.*?)<\/tbody>/g;
-    my @expiry = ( $expdata =~ /<td align="left".*?>(.*?)<\/td>/gs);
-
+    my( $expdata ) = $data =~ /cont_x.*?>(.*?)<\/tbody>/g;
+    my @expiry = ( $expdata =~ /<td class="left">(.*?)<\/td>/gs);
     my( $ret ) = $data =~ /CURRENT.*?<\/h4>(.*?)<table/s ? $1 : ' is unsigned';
     $ret =~ s/source:.*?</</si;
     $ret =~ s/<.*?>/\|/g;
@@ -924,7 +913,7 @@ sub Salary{
         $value = pformat( $value, '%.1f' );
         $ret =~ s/\$.*? /\$$value /;
         $ret .= "Cap Hit: \$$hit";
-        $ret .= " | Expiry After $expiry[-1] Season";
+        $ret .= " | Expiry After $expiry[$#expiry - 1] Season";
     }
 #remove the compare line.
     ($ret) =~ s/Compare This Contract \| //s;
@@ -994,7 +983,7 @@ sub Eklund{
     else              { $teamabv = FindTeam( $team, 1 ) }
 
     my $data = download( "http://espn.go.com/nhl/teams/roster?team=$teamabv" );
-    my( @players ) = $data =~ /class="...n?row player.*?a href.*?>(.*?)</sg or return 'error';
+    my( @players ) = $data =~ /class="Table2__td".*?a href.*?>(.*?)</sg or return 'error';
     my( $player ) = $players[ int( rand( $#players + 1 ) ) ];
     my( @teams, $i );
 
@@ -1328,7 +1317,7 @@ sub GoalVid {
     my( $team, $date ) = SplitDate( $params, '%Y-%m-%d' );
     my( $fullid, $js ) = FindGameID( $team, $date );
     my $all = $index =~ /all/i;
-    print "GoalVid -- team: $team index: $index date: $date\n" if( DEBUG );
+    print "GoalVid -- team: $team index: $index date: $date gameid: $fullid\n" if( DEBUG );
     return 'usage: goal <team> <index> [date]' if( !$team || !$index );
     $fullid =~ /^(\d{4})/
         or return "error $team did not play on " . GetDate( ($date ? $date : '-12 hours'), '%b %d, %Y' );
@@ -1474,11 +1463,22 @@ sub xrxs {
 
 }
 
-sub shorturl {
+sub shorturl2 {
     my $url = shift;
     $_ = wget( 'https://www.googleapis.com/urlshortener/v1/url?key=AIzaSyBzq7JCfoRml_m7hKndjh7_Y6K1o1ANDO0', "--header 'Content-Type: application/json' --post-data='{\"longUrl\": \"$url\"}'" );
     return "http://$1" if( /"id":\s*"http.*?(goo.*?)"/ );
     print "goo.gl error:\n$_\n" if( DEBUG );
+    return $url;
+}
+
+sub shorturl {
+	my $url = shift;
+	$url = "http://$url" if( $url !~ /^http/i );
+	my $api = 'AIzaSyCxfvD4pGd2_EQLrlBU1qlrrfEodyOBjRE';
+	$_ = wget( "https://firebasedynamiclinks.googleapis.com/v1/shortLinks?key=$api",
+		"--header 'Content-Type: application/json' --post-data='{\"longDynamicLink\": \"https://pnv53.app.goo.gl/?link=$url\", \"suffix\": { \"option\": \"SHORT\" } }'" );
+    return $1 if( /"shortLink":\s*"(.*?)"/ );
+    print "firebaseshorturl error:\n$_\n" if( DEBUG );
     return $url;
 }
 
