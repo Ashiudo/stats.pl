@@ -953,12 +953,12 @@ sub GoalieStart{
         my @team = /"top-heading-heavy">(.*?) at (.*?)</s;
         next if( FindTeam( $1 ) ne FindTeam( $search ) && FindTeam( $2 ) ne FindTeam( $search ) && "$1 $2" !~ /\Q$search\E/i );
         my $home = FindTeam( $team[1], 1 ) eq FindTeam( $search, 1 ) ? 1 : 0;
-        my @name = /class="goalie-info.*?<h4>(.*?)</sg;
+        my @name = /class="goalie-info text.*?<h4.*?>(.*?)</sg;
         my @status = /h5 class="news-strength.*?(\w+)\s*<\/h5>/sg;
         my( $time ) = /game-time">\s*(\d+.*?)\s\s/s;
         if( !$date || $date eq GetDate( '-12 hours', '%m-%d-%Y' ) ) {
             my $gstats = StatsGame( $name[$home] );
-            if( $gstats !~ /player not found|error|SH 0 / ) {
+            if( $gstats !~ /player not found|error|SH 0 |GV\=Give/ ) {
                 return $gstats;
             }
         }
