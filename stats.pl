@@ -983,7 +983,7 @@ sub Eklund{
     else              { $teamabv = FindTeam( $team, 1 ) }
 
     my $data = download( "http://espn.go.com/nhl/teams/roster?team=$teamabv" );
-    my( @players ) = $data =~ /class="Table2__td".*?a href.*?>(.*?)</sg or return 'error';
+    my( @players ) = $data =~ /class="Table2__td".*?id\/\d+">(.*?)</sg or return 'error';
     my( $player ) = $players[ int( rand( $#players + 1 ) ) ];
     my( @teams, $i );
 
