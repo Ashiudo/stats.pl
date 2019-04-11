@@ -669,7 +669,7 @@ sub RotoNews {
 
     my( $data );
     my $search = shift;
-    my %g = google( 'http://www.rotowire.com/hockey/', $search );
+    my %g = google( 'http://www.rotowire.com/hockey/player', $search );
     for my $c ( 1 .. $g{count} ) {
         #http://www.rotowire.com/hockey/player.htm?id=1675
         if( $g{title}[$c] =~ /\Q$search\E/i && $g{url}[$c] =~ m!(https?://www.rotowire.com/hockey/player\.php\?[Ii][Dd]=\d+)! ) {
@@ -953,7 +953,7 @@ sub GoalieStart{
         my @team = /"top-heading-heavy">(.*?) at (.*?)</s;
         next if( FindTeam( $1 ) ne FindTeam( $search ) && FindTeam( $2 ) ne FindTeam( $search ) && "$1 $2" !~ /\Q$search\E/i );
         my $home = FindTeam( $team[1], 1 ) eq FindTeam( $search, 1 ) ? 1 : 0;
-        my @name = /class="goalie-info text.*?<h4.*?>(.*?)</sg;
+        my @name = /Goalie \-\-.*?<h4>(.*?)</sg;
         my @status = /h5 class="news-strength.*?(\w+)\s*<\/h5>/sg;
         my( $time ) = /game-time">\s*(\d+.*?)\s\s/s;
         if( !$date || $date eq GetDate( '-12 hours', '%m-%d-%Y' ) ) {
@@ -983,7 +983,8 @@ sub Eklund{
     else              { $teamabv = FindTeam( $team, 1 ) }
 
     my $data = download( "http://espn.go.com/nhl/teams/roster?team=$teamabv" );
-    my( @players ) = $data =~ /class="Table2__td".*?id\/\d+">(.*?)</sg or return 'error';
+    my( @players ) = $data =~ /class="Table2__td".*?id\/\d+">([^<]+)/sg or return 'error';
+
     my( $player ) = $players[ int( rand( $#players + 1 ) ) ];
     my( @teams, $i );
 
