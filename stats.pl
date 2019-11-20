@@ -953,9 +953,9 @@ sub GoalieStart{
         my @team = /"top-heading-heavy">(.*?) at (.*?)</s;
         next if( FindTeam( $1 ) ne FindTeam( $search ) && FindTeam( $2 ) ne FindTeam( $search ) && "$1 $2" !~ /\Q$search\E/i );
         my $home = FindTeam( $team[1], 1 ) eq FindTeam( $search, 1 ) ? 1 : 0;
-        my @name = /Goalie \-\-.*?<h4>(.*?)</sg;
+        my @name = /<h4>(.*?)</sg;
         my @status = /h5 class="news-strength.*?(\w+)\s*<\/h5>/sg;
-        my( $time ) = /game-time">\s*(\d+.*?)\s\s/s;
+        my( $time ) = /game-time">\s*(\d+.*?)(?:\s\s|\ <)/s;
         if( !$date || $date eq GetDate( '-12 hours', '%m-%d-%Y' ) ) {
             my $gstats = StatsGame( $name[$home] );
             if( $gstats !~ /player not found|error|SH 0 |GV\=Give/ ) {
@@ -983,7 +983,7 @@ sub Eklund{
     else              { $teamabv = FindTeam( $team, 1 ) }
 
     my $data = download( "http://espn.go.com/nhl/teams/roster?team=$teamabv" );
-    my( @players ) = $data =~ /class="Table2__td".*?id\/\d+">([^<]+)/sg or return 'error';
+    my( @players ) = $data =~ /"Table__TD".*?href="http:..www.espn.com.nhl.player.*?>([^<]+)/sg or return 'error';
 
     my( $player ) = $players[ int( rand( $#players + 1 ) ) ];
     my( @teams, $i );
