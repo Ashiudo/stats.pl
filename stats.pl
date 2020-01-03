@@ -1363,6 +1363,9 @@ sub GoalVid {
         if( $hq ) {
             @playbacks = grep { $_->{name} eq 'HTTP_CLOUD_WIRED_60' } @playbacks;
         } else {
+            foreach( @playbacks ) {
+                $_->{height} = $1 if( $_->{name} =~ /\d+x(\d+)/i );
+            }
             @playbacks = sort { $b->{height} <=> $a->{height} } grep { $_->{height} && ($_->{height} ne 'null') } @playbacks;
         }
 
