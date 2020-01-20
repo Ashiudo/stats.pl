@@ -1072,13 +1072,12 @@ sub StatsTeam{
     }
     return 'an error occured';
 }
-
 sub LeadersNHL {
 
     my $cat = lc( shift );
     my $i = 0;
     my @cats = qw!    p($|[^l]) g($|o)  a       plus|\+   ga  s[av]          w    s[oh]!;
-    my @catnames = qw(points    goals   assists plusMinus gaa savePercentage wins shutout);
+    my @catnames = qw(points    goals   assists plusMinus gaa savePct wins shutouts);
     foreach( @cats ) {
         last if( $cat =~ /^$_/ );
         $i++;
@@ -1088,34 +1087,78 @@ sub LeadersNHL {
         return "Valid categories: \x035P\x03oints \x035G\x03oals \x035A\x03ssists " .
             "\x035+\x03/- \x035GAA\x03 \x035SV\x03% \x035W\x03ins \x035Sh\x03utouts";
     }
-
-    my $data = download( 'http://www.nhl.com/stats/rest/leaders' ); # new json rest api
+    
+    my $season = $params =~ /(20\d\d)$/ ? $1 : GetDate( '8 months ago', "%Y" );
+    $season = $season . ($season+1);
+    
+    my $playertype = ($i < 4 ? "skater" : "goalie");
+    #https://api.nhle.com/stats/rest/en/skater/summary?isAggregate=false&isGame=false&sort=%5B%7B%22property%22:%22points%22,%22direction%22:%22DESC%22%7D%5D&start=0&limit=50&factCayenneExp=gamesPlayed%3E=1&cayenneExp=gameTypeId=2%20and%20seasonId%3C=20192020%20and%20seasonId%3E=20192020
+    my $link = "https://api.nhle.com/stats/rest/en/$playertype/summary?start=0&limit=5"
+		. "&sort=%5B%7B%22property%22:%22$catnames[$i]%22,%22direction%22:%22DESC%22%7D%5D"
+		. "&cayenneExp=seasonId%3C=$season%20and%20seasonId%3E=$season";
+    
+    my $data = download( $link );
     my $js;
     eval '$js = decode_json( $data )';
     return 'nhl.com error' if( $@ );
 
-    foreach( @{ $i < 4 ? $js->{skater} : $js->{goalie} } ) {
-        if( $_->{measure} eq $catnames[$i] ) {
-            $js = $_;
-            last;
-        }
-    }
-
-    print "usin cat $js->{measure}\n" if( DEBUG );
-
     my @ret = "Top 5 " . uc $catnames[$i];
-    my @sorted = sort { $a->{listIndex} gt $b->{listIndex } } @{ $js->{leaders} };
-
-    my( $maxlen, @players ) = 0;
+  
+    my( $maxlen, @players, @sorted ) = 0;
     for my $c ( 0 .. 4 ) {
-        $players[$c] = $sorted[$c]->{'fullName'};
+        $players[$c] = $js->{data}[$c]{$playertype . "FullName"};
         $players[$c] =~ s/(.).*? /$1\. /;
         $maxlen = length( $players[$c] ) if( length( $players[$c] ) > $maxlen );
     }
 
     for my $j ( 0 .. 4 ) {
         push @ret, sprintf "%d. %-${maxlen}s [%s] \x02%s\x02",
-            $j + 1, $players[$j], $sorted[$j]->{'tricode'}, $sorted[$j]->{'valueLabel'};
+            $j + 1, $players[$j], $js->{data}[$j]{teamAbbrevs}, $js->{data}[$j]{$catnames[$i]};
+    }
+
+    return ($#ret == 5 ? @ret : "error occured");
+
+}
+
+sub LeadersNHL2 {
+
+    my $cat = lc( shift );
+    my $i = 0;
+    my @cats = qw!    p($|[^l]) g($|o)  a       plus|\+   ga  s[av]          w    s[oh]!;
+    my @catnames = qw(points    goals   assists plusMinus gaa savePctg wins shutouts);
+    foreach( @cats ) {
+        last if( $cat =~ /^$_/ );
+        $i++;
+    }
+
+    if( $i == @cats ) {
+        return "Valid categories: \x035P\x03oints \x035G\x03oals \x035A\x03ssists " .
+            "\x035+\x03/- \x035GAA\x03 \x035SV\x03% \x035W\x03ins \x035Sh\x03utouts";
+    }
+    
+    my $season = $params =~ /(20\d\d)$/ ? $1 : GetDate( '8 months ago', "%Y" );
+    #https://api.nhle.com/stats/rest/en/leaders/skaters/points?cayenneExp=season=20192020%20and%20gameType=2
+    my $link = "https://api.nhle.com/stats/rest/en/leaders/" . ($i < 4 ? "skaters" : "goalies") . "/$catnames[$i]?cayenneExp="
+		. "season=$season" . ($season+1); #. "%20and%20gameType=2";    
+    
+    my $data = download( $link );
+    my $js;
+    eval '$js = decode_json( $data )';
+    return 'nhl.com error' if( $@ );
+
+    my @ret = "Top 5 " . uc $catnames[$i];
+  
+    my( $maxlen, @players, @sorted ) = 0;
+    for my $c ( 0 .. 4 ) {
+        $players[$c] = $js->{data}[$c]{player}{fullName};
+        print $players[$c], "\n";
+        $players[$c] =~ s/(.).*? /$1\. /;
+        $maxlen = length( $players[$c] ) if( length( $players[$c] ) > $maxlen );
+    }
+
+    for my $j ( 0 .. 4 ) {
+        push @ret, sprintf "%d. %-${maxlen}s [%s] \x02%s\x02",
+            $j + 1, $players[$j], $js->{data}[$j]{team}{triCode}, $js->{data}[$j]{$catnames[$i]};
     }
 
     return ($#ret == 5 ? @ret : "error occured");
